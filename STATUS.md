@@ -1,34 +1,37 @@
 # HexPour — STATUS
 
-| Field | Value |
-|-------|--------|
-| **Project ID** | `proj_hexpour_001` |
-| **Slug** | `hexpour` |
-| **Version** | 0.1.0 |
-| **Path** | `/workspace/factory/projects/hexpour` |
-| **Status** | `READY_FOR_QA` |
-| **Updated** | 2026-09-28 (Asia/Karachi) |
-
-## Pipeline
-
-PRD_READY → BUILD → **READY_FOR_QA** → (await QA) → Master dual-clear → push
+**Status:** SHIPPED  
+**Updated:** 2026-09-28T18:27:00+05:00 (PKT)  
+**Version:** 0.1.0  
+**Project ID:** `proj_hexpour_001`  
+**Path:** `/workspace/factory/projects/hexpour`  
+**Release source SHA:** `754788616ea56933efaff1ef4581fe6b312decc4` (`7547886`, not amended)  
+**Pages:** https://offerpk.github.io/hexpour/
 
 ## Gates
 
-- [x] Vite + TS + PWA; `base: '/hexpour/'`
-- [x] Flat-top axial hex math + canvas renderer; stacks in hexes
-- [x] Pour engine: adjacency, capacity, same-color runs, blocked cells, win
-- [x] 40 JSON levels
-- [x] Unlimited undo + hint (1 free / rewarded stub)
-- [x] Ads stubs wired in UI
-- [x] Home / levels / play / win + mute/settings
-- [x] localStorage progress
-- [x] Vitest + build green
-- [x] README + GUIDE-roman-urdu + CHANGELOG
-- [ ] QA pass
-- [ ] Master dual-clear
-- [ ] git push (blocked until dual-clear)
+| Gate | Result |
+|------|--------|
+| QA | **PASS** |
+| Security | **PASS_WITH_NOTES** — clear to ship; no blockers |
+| `npm test` | **17/17 passed** |
+| `npm run build` | **green** (Vite + TypeScript + PWA; base `/hexpour/`) |
+
+## v0.1.0 release
+
+HexPour MVP: flat-top axial hex pour, 40 BFS-solvable levels, unlimited undo, hint and ads stubs, Home / levels / play / win screens, progress persistence, PWA offline shell, README, and Roman Urdu guide.
+
+Dual-clear: QA PASS + Security PASS_WITH_NOTES. Security notes are non-blocking (local progress range hardening, `.env*` ignore hygiene, dev-only Vitest audit findings, and host CSP guidance). No security code edits were made.
+
+## Deployment
+
+- Repository: https://github.com/OfferPk/hexpour
+- Release: https://github.com/OfferPk/hexpour/releases/tag/v0.1.0
+- GitHub Pages base: `/hexpour/`
+- Deployment branch: `gh-pages`
+- `.nojekyll`: included for Pages
 
 ## Notes
 
-TubeSort remains SKIPPED. Original soft-hive theme — no Hexa Sort / Hex Match IP.
+- Original soft-hive theme; no Hexa Sort / Hex Match / TubeSort IP or branding.
+- Keep `base: '/hexpour/'` in `vite.config.ts`.
