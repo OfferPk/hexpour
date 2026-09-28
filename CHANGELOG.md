@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.1 — 2026-09-28
 
 ### Added
 - First-run howto overlay + Home **How to play** (`hexpour:howto`)

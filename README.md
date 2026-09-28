@@ -9,7 +9,7 @@
 | **Project ID** | `proj_hexpour_001` |
 | **Slug** | `hexpour` |
 | **Pages base** | `/hexpour/` |
-| **Version** | 0.1.0 |
+| **Version** | 0.1.1 |
 | **Stack** | Vite + TypeScript + PWA |
 
 ## Play
@@ -56,7 +56,7 @@ Orientation: **flat-top** axial coordinates (documented in `src/game/hex.ts`).
 - Screens: Home, level select, play, win; mute / settings
 - Progress in `localStorage` (unlock + adsRemoved + mute)
 - PWA offline after first load
-- First-run howto + Home How to play; win Share; Home A2HS tip (Unreleased polish)
+- First-run howto + Home How to play; win Share; Home A2HS tip
 
 ## Docs
 
