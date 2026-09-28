@@ -44,7 +44,18 @@ Koi login nahi. Progress `localStorage` mein save hoti hai.
 
 ### Win
 - Har occupied cell ek hi color ki solid stack ho; khali cells OK
-- Win screen → Next / Levels / Home
+- Win screen → Next / **Share** / Levels / Home
+- Share: `navigator.share` ya clipboard + toast (offline OK)
+
+### How to play
+- **Kahan:** Pehli open par auto overlay; Home → **How to play**
+- **Kaise:** 4–6 bullets (adjacent pour, capacity, win, Undo, Hint); Got it → `hexpour:howto` save
+- **Result:** Rules samajh aati hain; Play block nahi hota
+
+### Add to Home Screen (A2HS tip)
+- **Kahan:** Sirf Home — soft tip
+- **Kaise:** EN + Roman Urdu; Got it → session dismiss (`hexpour:a2hs`)
+- **Result:** Levels/play/win par tip nahi; pehle howto, phir Home+A2HS OK
 
 ### Undo
 - **Kahan:** Play toolbar → Undo
@@ -83,5 +94,6 @@ Koi login nahi. Progress `localStorage` mein save hoti hai.
 
 ## 9. Agla update
 
-- Zyada levels, polish animations, real ads SDK (jab factory decide kare)
+- Unreleased polish: in-app howto, win Share, Home A2HS tip
+- Zyada levels / real ads SDK (jab factory decide kare)
 - TubeSort / tubes kabhi nahi aayenge — hex adjacency hi core hai

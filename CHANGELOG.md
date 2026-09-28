@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- First-run howto overlay + Home **How to play** (`hexpour:howto`)
+- Win screen **Share** (navigator.share + clipboard fallback + toast)
+- Home soft **Add to Home Screen** tip (session dismiss `hexpour:a2hs`)
+
 ## 0.1.0 — 2026-09-28
 
 ### Added

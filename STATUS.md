@@ -1,8 +1,8 @@
 # HexPour — STATUS
 
-**Status:** SHIPPED  
-**Updated:** 2026-09-28T18:27:00+05:00 (PKT)  
-**Version:** 0.1.0  
+**Status:** READY_FOR_QA  
+**Updated:** 2026-09-28T18:45:00+05:00 (PKT)  
+**Version:** 0.1.0 (SHIPPED) + Unreleased polish  
 **Project ID:** `proj_hexpour_001`  
 **Path:** `/workspace/factory/projects/hexpour`  
 **Release source SHA:** `754788616ea56933efaff1ef4581fe6b312decc4` (`7547886`, not amended)  
@@ -12,12 +12,22 @@
 
 | Gate | Result |
 |------|--------|
-| QA | **PASS** |
+| QA | **PASS** (v0.1.0) — Unreleased polish pending QA |
 | Security | **PASS_WITH_NOTES** — clear to ship; no blockers |
-| `npm test` | **17/17 passed** |
-| `npm run build` | **green** (Vite + TypeScript + PWA; base `/hexpour/`) |
+| `npm test` | see latest commit notes |
+| `npm run build` | see latest commit notes |
 
-## v0.1.0 release
+## Unreleased polish (post v0.1.0)
+
+IMPROVE delta — do **not** amend tag `v0.1.0` or rewrite release commits:
+
+1. First-run howto overlay + Home **How to play** (`localStorage` `hexpour:howto`)
+2. Win **Share** (`navigator.share` + clipboard fallback + toast)
+3. Home soft A2HS tip (session dismiss `hexpour:a2hs`)
+
+Pages base remains `/hexpour/`. No level JSON / generator / TubeSort / ads / mute→SFX / daily challenge changes.
+
+## v0.1.0 release (SHIPPED)
 
 HexPour MVP: flat-top axial hex pour, 40 BFS-solvable levels, unlimited undo, hint and ads stubs, Home / levels / play / win screens, progress persistence, PWA offline shell, README, and Roman Urdu guide.
 

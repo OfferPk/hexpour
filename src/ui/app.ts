@@ -1,5 +1,6 @@
 /**
  * HexPour UI — Home, level select, play, win; mute/settings; ads wired.
+ * Post-v0.1.0 polish: first-run howto, win Share, Home A2HS tip.
  */
 import {
   cloneBoard,
@@ -9,7 +10,10 @@ import {
   tryPour,
 } from '../game/engine';
 import {
+  A2HS_KEY,
+  isHowtoSeen,
   loadPersist,
+  markHowtoSeen,
   savePersist,
   unlockLevel,
   type PersistData,
@@ -134,6 +138,122 @@ export function mountApp(root: HTMLElement): void {
     });
   }
 
+  // —— How to play (overlay) ——
+  function openHowto(fromFirstRun: boolean): void {
+    el.overlay.className = 'overlay open';
+    el.overlay.innerHTML = '';
+    const modal = div('modal howto-modal');
+    const h = document.createElement('h2');
+    h.textContent = 'How to play';
+    modal.append(h);
+
+    const list = document.createElement('ul');
+    list.className = 'howto-list';
+    const bullets = [
+      'Tap a hex with colors, then tap an <strong>adjacent</strong> hex to pour.',
+      'Target must be empty or share the same top color.',
+      'Each cell has limited capacity (3–4).',
+      '<strong>Win:</strong> every occupied stack is a single pure color.',
+      '<strong>Undo</strong> is unlimited.',
+      '<strong>Hint:</strong> 1 free per level, then rewarded stub.',
+    ];
+    for (const html of bullets) {
+      const li = document.createElement('li');
+      li.innerHTML = html;
+      list.append(li);
+    }
+    modal.append(list);
+
+    const urdu = document.createElement('p');
+    urdu.className = 'howto-urdu';
+    urdu.textContent = 'Sirf padosi hex par pour — tubes nahi, hive hai.';
+    modal.append(urdu);
+
+    modal.append(
+      button('Got it', 'btn block', () => {
+        markHowtoSeen();
+        el.overlay.className = 'overlay';
+        el.overlay.innerHTML = '';
+        if (fromFirstRun || screen !== 'home') {
+          setScreen('home');
+        } else {
+          // Stay on Home; refresh so A2HS can show after first-run dismiss.
+          renderHome();
+        }
+      }),
+    );
+    el.overlay.append(modal);
+  }
+
+  // —— Share helpers ——
+  function legacyCopy(text: string): void {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function copyShare(text: string): void {
+    const done = () => showToast('Copied');
+    if (navigator.clipboard?.writeText) {
+      void navigator.clipboard.writeText(text).then(done).catch(() => {
+        legacyCopy(text);
+        done();
+      });
+      return;
+    }
+    legacyCopy(text);
+    done();
+  }
+
+  function shareWin(): void {
+    persist = loadPersist();
+    let text = `HexPour — hive clear! Level ${levelId}`;
+    if (persist.unlocked > 1) {
+      text += ` · unlocked through ${persist.unlocked}`;
+    }
+    if (typeof navigator.share === 'function') {
+      void navigator.share({ title: 'HexPour', text }).catch(() => {
+        copyShare(text);
+      });
+      return;
+    }
+    copyShare(text);
+  }
+
+  function a2hsDismissed(): boolean {
+    try {
+      return sessionStorage.getItem(A2HS_KEY) === '1';
+    } catch {
+      return true;
+    }
+  }
+
+  function dismissA2hs(): void {
+    try {
+      sessionStorage.setItem(A2HS_KEY, '1');
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function isStandalone(): boolean {
+    try {
+      return window.matchMedia('(display-mode: standalone)').matches;
+    } catch {
+      return false;
+    }
+  }
+
   function setScreen(s: Screen): void {
     screen = s;
     for (const k of ['home', 'levels', 'play', 'win'] as const) {
@@ -168,9 +288,26 @@ export function mountApp(root: HTMLElement): void {
         startLevel(levelId);
       }),
       button('Levels', 'btn secondary block', () => setScreen('levels')),
+      button('How to play', 'btn ghost block', () => openHowto(false)),
       button('Settings', 'btn ghost block', () => openSettings()),
     );
     el.home.append(hero, actions);
+
+    // Soft A2HS tip — Home only; session dismiss; no beforeinstallprompt.
+    if (!a2hsDismissed() && !isStandalone()) {
+      const tip = div('a2hs');
+      const copy = div('a2hs-copy');
+      copy.innerHTML =
+        '<strong>Add to Home Screen</strong><span>Home screen par add karein — offline khelein.</span>';
+      tip.append(
+        copy,
+        button('Got it', 'btn secondary', () => {
+          dismissA2hs();
+          tip.remove();
+        }),
+      );
+      el.home.append(tip);
+    }
   }
 
   function openSettings(): void {
@@ -465,14 +602,18 @@ export function mountApp(root: HTMLElement): void {
       );
     }
     actions.append(
+      button('Share', 'btn gold block', () => shareWin()),
       button('Levels', 'btn secondary block', () => setScreen('levels')),
       button('Home', 'btn ghost block', () => setScreen('home')),
     );
     el.win.append(hero, actions);
   }
 
-  // boot
+  // boot — first-run howto once, then Home (+ A2HS OK after dismiss)
   setScreen('home');
+  if (!isHowtoSeen()) {
+    openHowto(true);
+  }
 }
 
 function div(className: string, id?: string): HTMLDivElement {

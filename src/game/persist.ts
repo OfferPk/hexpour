@@ -1,5 +1,14 @@
 const KEY = 'hexpour_v1';
 
+/** First-run howto flag — separate from save blob (peer: mahjongcalm:howto). */
+const HOWTO_KEY = 'hexpour:howto';
+
+/** Session A2HS tip dismiss key (used by UI). */
+export const A2HS_KEY = 'hexpour:a2hs';
+
+/** Soft upper bound for unlock clamp (matches shipped LEVEL_COUNT). */
+const UNLOCKED_MAX = 40;
+
 export interface PersistData {
   /** Highest unlocked level id (1-based). */
   unlocked: number;
@@ -13,13 +22,20 @@ const DEFAULTS: PersistData = {
   mute: false,
 };
 
+function clampUnlocked(n: number): number {
+  if (typeof n !== 'number' || !Number.isFinite(n)) return 1;
+  return Math.min(Math.max(Math.floor(n), 1), UNLOCKED_MAX);
+}
+
 function readRaw(): PersistData {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return { ...DEFAULTS };
     const parsed = JSON.parse(raw) as Partial<PersistData>;
     return {
-      unlocked: typeof parsed.unlocked === 'number' ? parsed.unlocked : 1,
+      unlocked: clampUnlocked(
+        typeof parsed.unlocked === 'number' ? parsed.unlocked : 1,
+      ),
       adsRemoved: parsed.adsRemoved === true,
       mute: parsed.mute === true,
     };
@@ -41,15 +57,23 @@ export function loadPersist(): PersistData {
 }
 
 export function savePersist(patch: Partial<PersistData>): PersistData {
-  const next = { ...readRaw(), ...patch };
+  const cur = readRaw();
+  const next: PersistData = {
+    unlocked:
+      patch.unlocked !== undefined ? clampUnlocked(patch.unlocked) : cur.unlocked,
+    adsRemoved:
+      patch.adsRemoved !== undefined ? patch.adsRemoved === true : cur.adsRemoved,
+    mute: patch.mute !== undefined ? patch.mute === true : cur.mute,
+  };
   writeRaw(next);
   return next;
 }
 
 export function unlockLevel(levelId: number): PersistData {
   const cur = readRaw();
-  if (levelId > cur.unlocked) {
-    return savePersist({ unlocked: levelId });
+  const id = clampUnlocked(levelId);
+  if (id > cur.unlocked) {
+    return savePersist({ unlocked: id });
   }
   return cur;
 }
@@ -60,4 +84,20 @@ export function getSettings(): PersistData {
 
 export function setSettings(patch: Partial<PersistData>): PersistData {
   return savePersist(patch);
+}
+
+export function isHowtoSeen(): boolean {
+  try {
+    return localStorage.getItem(HOWTO_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function markHowtoSeen(): void {
+  try {
+    localStorage.setItem(HOWTO_KEY, '1');
+  } catch {
+    /* quota / private */
+  }
 }
