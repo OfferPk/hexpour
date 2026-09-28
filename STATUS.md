@@ -1,23 +1,24 @@
 # HexPour — STATUS
 
-**Status:** READY_FOR_QA  
-**Updated:** 2026-09-28T18:45:00+05:00 (PKT)  
-**Version:** 0.1.0 (SHIPPED) + Unreleased polish  
+**Status:** SHIPPED  
+**Updated:** 2026-09-28T18:45:28+05:00 (PKT)  
+**Version:** 0.1.1 (SHIPPED)  
 **Project ID:** `proj_hexpour_001`  
 **Path:** `/workspace/factory/projects/hexpour`  
-**Release source SHA:** `754788616ea56933efaff1ef4581fe6b312decc4` (`7547886`, not amended)  
+**Release source SHA:** `c3841cc62084d492d1cf1e9385d5e79a37d9b1eb` (`c3841cc`, dual-cleared; not amended)
+**Release commit:** `d1635466138ce3e67815dfd9106cdd2163acf34a` (`d163546`)  
 **Pages:** https://offerpk.github.io/hexpour/
 
 ## Gates
 
 | Gate | Result |
 |------|--------|
-| QA | **PASS** (v0.1.0) — Unreleased polish pending QA |
-| Security | **PASS_WITH_NOTES** — clear to ship; no blockers |
-| `npm test` | see latest commit notes |
-| `npm run build` | see latest commit notes |
+| QA | **PASS** (IMPROVE-1834) @ `c3841cc` |
+| Security | **PASS_WITH_NOTES** @ `c3841cc` — clear to ship; no blockers; no security code edits |
+| `npm test` | **17/17 passed** |
+| `npm run build` | **green** |
 
-## Unreleased polish (post v0.1.0)
+## v0.1.1 polish (post v0.1.0)
 
 IMPROVE delta — do **not** amend tag `v0.1.0` or rewrite release commits:
 
@@ -40,6 +41,7 @@ Dual-clear: QA PASS + Security PASS_WITH_NOTES. Security notes are non-blocking 
 - GitHub Pages base: `/hexpour/`
 - Deployment branch: `gh-pages`
 - `.nojekyll`: included for Pages
+- Pages deploy commit: `9ce2ac63328c590b0e394b478828a19ab2621514` (`9ce2ac6`)
 
 ## Notes
 
