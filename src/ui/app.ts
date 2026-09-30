@@ -573,6 +573,10 @@ export function mountApp(root: HTMLElement): void {
     el.play.querySelector<HTMLElement>('.accessible-board > summary')?.focus();
   }
 
+  function focusHomeControls(): void {
+    el.home.querySelector<HTMLElement>('.home-actions button')?.focus();
+  }
+
   function renderPlayShell(): void {
     cleanupPlay?.();
     cleanupPlay = null;
@@ -1046,7 +1050,10 @@ export function mountApp(root: HTMLElement): void {
     const actions = div('home-actions');
     if (next <= LEVEL_COUNT) {
       actions.append(
-        button(`Next — Level ${next}`, 'btn block', () => startLevel(next)),
+        button(`Next — Level ${next}`, 'btn block', () => {
+          startLevel(next);
+          focusPlayControls();
+        }),
       );
     } else {
       actions.append(
@@ -1056,9 +1063,13 @@ export function mountApp(root: HTMLElement): void {
     actions.append(
       button('Share', 'btn gold block', () => shareWin()),
       button('Levels', 'btn secondary block', () => setScreen('levels')),
-      button('Home', 'btn ghost block', () => setScreen('home')),
+      button('Home', 'btn ghost block', () => {
+        setScreen('home');
+        focusHomeControls();
+      }),
     );
     el.win.append(hero, actions);
+    actions.querySelector<HTMLElement>('button')?.focus();
   }
 
   // boot — first-run howto once, then Home (+ A2HS OK after dismiss)

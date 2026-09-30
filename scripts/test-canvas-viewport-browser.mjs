@@ -58,6 +58,15 @@ const keyByStage = {
   'tab-picker-discard-keep': 'Tab',
   'tab-picker-discard-action': 'Tab',
   'enter-picker-discard': 'Enter',
+  'enter-win-source': 'Enter',
+  'enter-win-destination': 'Enter',
+  'enter-win-next': 'Enter',
+  'enter-win-source-home': 'Enter',
+  'enter-win-destination-home': 'Enter',
+  'tab-win-share': 'Tab',
+  'tab-win-levels': 'Tab',
+  'tab-win-home': 'Tab',
+  'enter-win-home': 'Enter',
 };
 
 const profileDirectory = await mkdtemp(join(tmpdir(), 'hexpour-viewport-chromium-'));
