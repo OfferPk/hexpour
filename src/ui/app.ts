@@ -531,13 +531,20 @@ export function mountApp(root: HTMLElement): void {
     adsRow.append(adsBtn);
     modal.append(adsRow);
 
+    const closeSettings = () => {
+      el.overlay.className = 'overlay';
+      el.overlay.innerHTML = '';
+      if (returnFocus?.isConnected) returnFocus.focus();
+    };
     modal.append(
-      button('Close', 'btn secondary block', () => {
-        el.overlay.className = 'overlay';
-        el.overlay.innerHTML = '';
-        if (returnFocus?.isConnected) returnFocus.focus();
-      }),
+      button('Close', 'btn secondary block', closeSettings),
     );
+    modal.addEventListener('keydown', (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      closeSettings();
+    });
     el.overlay.append(modal);
     focusDialog(modal);
   }

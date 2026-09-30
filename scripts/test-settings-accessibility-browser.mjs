@@ -42,7 +42,7 @@ async function waitFor(expression, label) {
   throw new Error(`Timed out waiting for ${label}`);
 }
 async function pressKey(key, shift = false) {
-  const virtualKey = ({ Tab: 9, Enter: 13 })[key];
+  const virtualKey = ({ Escape: 27, Tab: 9, Enter: 13 })[key];
   const params = { key, code: key, windowsVirtualKeyCode: virtualKey, nativeVirtualKeyCode: virtualKey, modifiers: shift ? 8 : 0 };
   await command('Input.dispatchKeyEvent', { type: 'keyDown', ...params });
   if (key === 'Enter') await command('Input.dispatchKeyEvent', { type: 'char', ...params, text: '\r', unmodifiedText: '\r' });
@@ -101,6 +101,11 @@ try {
   await command('Emulation.setDeviceMetricsOverride', { width: 844, height: 720, deviceScaleFactor: 1, mobile: false });
   await command('Page.navigate', { url });
   await waitFor(`document.readyState==='complete' && !!document.querySelector('#home.screen.active')`, 'fresh Home screen');
+  const initialStorage = await evaluate(`(()=>{const entries=(s)=>Object.fromEntries(Object.keys(s).sort().map(k=>[k,s.getItem(k)]));return {local:entries(localStorage),session:entries(sessionStorage)}})()`);
+  if (Object.keys(initialStorage.local).length || Object.keys(initialStorage.session).length) {
+    throw new Error(`Fresh browser storage was not empty before any fixture: ${JSON.stringify(initialStorage)}`);
+  }
+  const emptyStorageBeforeFixture = initialStorage;
   const firstRun = await evaluate(`({dialog:document.querySelector('.overlay.open [role="dialog"]')?.getAttribute('aria-labelledby'),focus:document.activeElement?.textContent?.trim()})`);
   if (!firstRun.dialog) throw new Error(`Fresh profile did not show first-run How to play: ${JSON.stringify(firstRun)}`);
   await evaluate(`document.querySelector('.overlay.open button')?.click()`);
@@ -119,7 +124,7 @@ try {
   await evaluate(`(()=>{localStorage.setItem('hexpour_v1',${JSON.stringify(settings)});localStorage.setItem('hexpour:in-progress',${JSON.stringify(progress)});sessionStorage.setItem('hexpour:a2hs','1');return true})()`);
   await command('Page.reload', { ignoreCache: true });
   await waitFor(`!!document.querySelector('#home.screen.active .home-resume')`, 'home with isolated saved-run fixture');
-  const before = await evaluate(`({settings:localStorage.getItem('hexpour_v1'),progress:localStorage.getItem('hexpour:in-progress'),focus:document.activeElement?.textContent?.trim()})`);
+  const before = await evaluate(`({settings:localStorage.getItem('hexpour_v1'),progress:localStorage.getItem('hexpour:in-progress'),session:Object.fromEntries(Object.keys(sessionStorage).sort().map(k=>[k,sessionStorage.getItem(k)])),focus:document.activeElement?.textContent?.trim()})`);
   const homeFocuses = [];
   for (let i = 0; i < 5; i++) { await pressKey('Tab'); homeFocuses.push(await evaluate(`document.activeElement?.textContent?.trim()`)); }
   if (homeFocuses.at(-1) !== 'Settings') throw new Error(`Keyboard did not reach the Settings opener: ${JSON.stringify(homeFocuses)}`);
@@ -142,6 +147,15 @@ try {
   await pressKey('Enter');
   await waitFor(`document.querySelector('.overlay.open [aria-label="Mute sound"]')?.getAttribute('aria-pressed')==='false' && JSON.parse(localStorage.getItem('hexpour_v1')).mute===false`, 'Mute toggle restored to its original state');
   const toggledBack = await evaluate(`(()=>{const b=document.querySelector('.overlay.open [aria-label="Mute sound"]');return {text:b?.textContent?.trim(),pressed:b?.getAttribute('aria-pressed'),mute:JSON.parse(localStorage.getItem('hexpour_v1')).mute}})()`);
+  await pressKey('Escape');
+  await waitFor(`!document.querySelector('.overlay.open [role="dialog"]')`, 'Escape to close Settings');
+  const escapeAfter = await evaluate(`({openerFocused:document.activeElement===window.__settingsOpener,settings:localStorage.getItem('hexpour_v1'),progress:localStorage.getItem('hexpour:in-progress'),session:Object.fromEntries(Object.keys(sessionStorage).sort().map(k=>[k,sessionStorage.getItem(k)])),screen:[...document.querySelectorAll('.screen.active')].map(x=>x.id)})`);
+  if (!escapeAfter.openerFocused || escapeAfter.settings !== before.settings || escapeAfter.progress !== before.progress ||
+      JSON.stringify(escapeAfter.session) !== JSON.stringify(before.session) || escapeAfter.screen.join(',') !== 'home') {
+    throw new Error(`Escape did not safely close Settings and restore focus without changing the saved run or preferences: ${JSON.stringify({ before, escapeAfter })}`);
+  }
+  await pressKey('Enter');
+  await waitFor(`!!document.querySelector('.overlay.open [role="dialog"]')`, 'Settings reopened for Close-button keyboard coverage');
   await pressKey('Tab');
   const focusClose = await evaluate(`document.activeElement?.textContent?.trim()`);
   await pressKey('Tab');
@@ -150,15 +164,15 @@ try {
   const focusReverseWrapped = await evaluate(`document.activeElement?.textContent?.trim()`);
   await pressKey('Enter');
   await waitFor(`!document.querySelector('.overlay.open')`, 'Settings dialog close');
-  const after = await evaluate(`({focusText:document.activeElement?.textContent?.trim(),focusTag:document.activeElement?.tagName,openerFocused:document.activeElement===window.__settingsOpener,settings:localStorage.getItem('hexpour_v1'),progress:localStorage.getItem('hexpour:in-progress'),screen:[...document.querySelectorAll('.screen.active')].map(x=>x.id),resume:document.querySelector('#home .home-resume')?.getAttribute('aria-label')})`);
+  const after = await evaluate(`({focusText:document.activeElement?.textContent?.trim(),focusTag:document.activeElement?.tagName,openerFocused:document.activeElement===window.__settingsOpener,settings:localStorage.getItem('hexpour_v1'),progress:localStorage.getItem('hexpour:in-progress'),session:Object.fromEntries(Object.keys(sessionStorage).sort().map(k=>[k,sessionStorage.getItem(k)])),screen:[...document.querySelectorAll('.screen.active')].map(x=>x.id),resume:document.querySelector('#home .home-resume')?.getAttribute('aria-label')})`);
   if (toggledOn.text !== 'On' || toggledOn.pressed !== 'true' || toggledOn.mute !== true ||
       toggledBack.text !== 'Off' || toggledBack.pressed !== 'false' || toggledBack.mute !== false ||
       focusClose !== 'Close' || focusWrapped !== 'Mute sound' || focusReverseWrapped !== 'Close' || !after.openerFocused ||
-      after.settings !== before.settings || after.progress !== before.progress || after.screen.join(',') !== 'home' ||
+      after.settings !== before.settings || after.progress !== before.progress || JSON.stringify(after.session) !== JSON.stringify(before.session) || after.screen.join(',') !== 'home' ||
       !after.resume?.includes('Level 2')) {
-    throw new Error(`Settings changed game state or focus unexpectedly: ${JSON.stringify({ toggledOn, toggledBack, focusClose, focusWrapped, focusReverseWrapped, before, after })}`);
+    throw new Error(`Settings changed game state or focus unexpectedly: ${JSON.stringify({ toggledOn, toggledBack, escapeAfter, focusClose, focusWrapped, focusReverseWrapped, before, after })}`);
   }
-  console.log(JSON.stringify({ status: 'PASS', target: url, profile: 'fresh empty temporary Chromium profile; removed after test', accessibilitySummary, dialog, focusStart, toggledOn, toggledBack, focusClose, focusWrapped, focusReverseWrapped, focusReturnedToOpener: after.openerFocused, savedRunAndSettingsPreserved: after.settings === before.settings && after.progress === before.progress, savedRun: JSON.parse(after.progress), settings: after.settings }, null, 2));
+  console.log(JSON.stringify({ status: 'PASS', target: url, profile: 'fresh disposable Chromium profile; verified empty before fixture; removed after test', initialStorage, emptyStorageBeforeFixture, accessibilitySummary, dialog, focusStart, toggledOn, toggledBack, escapeAfter, escapeReturnedFocusToOpener: escapeAfter.openerFocused, escapePreservedSavedRunAndSettings: escapeAfter.settings === before.settings && escapeAfter.progress === before.progress && JSON.stringify(escapeAfter.session) === JSON.stringify(before.session), focusClose, focusWrapped, focusReverseWrapped, focusReturnedToOpener: after.openerFocused, savedRunAndSettingsPreserved: after.settings === before.settings && after.progress === before.progress, savedRun: JSON.parse(after.progress), settings: after.settings }, null, 2));
 } finally {
   try { socket?.close(); } catch {}
   if (browser && browser.exitCode === null) {
