@@ -705,9 +705,14 @@ export function mountApp(root: HTMLElement): void {
   function activateCell(hit: Axial): void {
     if (!board) return;
     const cell = board.cells.get(`${hit.q},${hit.r}`);
-    if (!cell || cell.blocked) {
+    if (!cell) {
       selected = null;
       refreshCellControls();
+      return;
+    }
+    if (cell.blocked) {
+      showToast('Blocked cell');
+      if (selected) refreshCellControls();
       return;
     }
     if (!selected) {

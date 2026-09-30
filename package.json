@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "audit:levels": "vite-node --script scripts/audit-level-depths.ts",
     "test:browser:viewport": "node scripts/test-canvas-viewport-browser.mjs",
+    "test:browser:blocked": "node scripts/test-blocked-destination-browser.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },
