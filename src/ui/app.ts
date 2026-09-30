@@ -55,6 +55,8 @@ import {
 
 type Screen = 'home' | 'levels' | 'play' | 'win';
 
+const TERMINAL_REPLAY_ENTER_GUARD_MS = 350;
+
 const ARROW_DIRECTIONS: Partial<Record<KeyboardEvent['key'], ScreenDirection>> = {
   ArrowUp: 'up',
   ArrowDown: 'down',
@@ -68,6 +70,7 @@ export function mountApp(root: HTMLElement): void {
   const shouldAnnounceRestore = createReloadRestoreCueGate(navigation?.type);
   let screen: Screen = 'home';
   let levelId = 1;
+  let terminalReplayEnterGuardUntil = 0;
   let board: BoardState | null = null;
   let undoStack: BoardState[] = [];
   let selected: Axial | null = null;
@@ -335,6 +338,23 @@ export function mountApp(root: HTMLElement): void {
     selected = null;
     refreshCellControls();
   });
+
+  const suppressTerminalReplayEnter = (event: KeyboardEvent): void => {
+    const replay = el.win.querySelector('.home-actions button');
+    if (
+      event.defaultPrevented ||
+      event.key !== 'Enter' ||
+      screen !== 'win' ||
+      levelId !== LEVEL_COUNT ||
+      performance.now() >= terminalReplayEnterGuardUntil ||
+      document.activeElement !== replay
+    ) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
+  document.addEventListener('keydown', suppressTerminalReplayEnter, true);
+  document.addEventListener('keypress', suppressTerminalReplayEnter, true);
+  document.addEventListener('keyup', suppressTerminalReplayEnter, true);
 
   function findHomeResumeProgress(): { levelId: number; moveCount: number } | null {
     const lastUnlocked = Math.min(persist.unlocked, LEVEL_COUNT);
@@ -1097,6 +1117,7 @@ export function mountApp(root: HTMLElement): void {
       // all done — keep unlocked at 40
       markLevelComplete(levelId);
       persist = unlockLevel(LEVEL_COUNT);
+      terminalReplayEnterGuardUntil = performance.now() + TERMINAL_REPLAY_ENTER_GUARD_MS;
     }
     setScreen('win');
   }

@@ -259,6 +259,14 @@ try {
     'Keyboard reaches the adjacent legal final-pour target with visible focus', destination);
   await pressKey('Enter');
   await waitFor(`!!document.querySelector('#win.screen.active')`, 'Level 40 terminal completion');
+  await pressKey('Enter');
+  const rapidReplay = await evaluate(`(() => {
+    const focus=document.activeElement;
+    const storage=Object.fromEntries(Array.from({length:localStorage.length},(_,i)=>localStorage.key(i)).filter(key=>key!==null).sort().map(key=>[key,localStorage.getItem(key)]));
+    return {activeScreen:[...document.querySelectorAll('.screen.active')].map(node=>node.id),heading:document.querySelector('#win h1')?.textContent?.trim(),focus:{text:(focus?.innerText||focus?.textContent||'').trim(),focusVisible:focus?.matches(':focus-visible'),outlineStyle:focus?getComputedStyle(focus).outlineStyle:null},move:document.querySelector('#play .move-status')?.textContent,settings:JSON.parse(storage['hexpour_v1']||'null'),save:storage['hexpour:in-progress'],completed:storage['hexpour:completed-levels'],replayButtons:[...document.querySelectorAll('#win .home-actions button')].filter(button=>button.textContent.trim()==='All 40 clear — Replay').length};
+  })()`);
+  check(rapidReplay.activeScreen.length === 1 && rapidReplay.activeScreen[0] === 'win' && rapidReplay.heading === 'Hive clear!' && rapidReplay.focus.text === 'All 40 clear — Replay' && rapidReplay.focus.focusVisible && rapidReplay.focus.outlineStyle === 'solid' && rapidReplay.move === 'Pours: 2' && rapidReplay.settings?.unlocked === 40 && rapidReplay.save === undefined && rapidReplay.completed === '[40]' && rapidReplay.replayButtons === 1,
+    'A rapid second Enter after the final pour cannot activate Replay or start Level 1', rapidReplay);
   const win = await evaluate(`(() => {
     const buttons=[...document.querySelectorAll('#win .home-actions button')];
     const focus=document.activeElement;
@@ -277,6 +285,7 @@ try {
   check(axNodes.some((node) => node.role === 'heading' && node.name === 'Hive clear!') && axNodes.some((node) => node.role === 'button' && node.name === 'All 40 clear — Replay'),
     'Browser accessibility tree exposes the completion heading and Replay control', axNodes);
 
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, 400));
   await pressKey('Enter');
   await waitFor(`!!document.querySelector('#play.screen.active')&&document.querySelector('#play .title')?.textContent==='Level 1'`, 'Replay to Level 1');
   const replay = await evaluate(`({focus:${focusExpression},move:document.querySelector('#play .move-status')?.textContent,undoDisabled:document.querySelector('#play .toolbar button')?.disabled,settings:JSON.parse(localStorage.getItem('hexpour_v1')||'null'),save:localStorage.getItem('hexpour:in-progress'),completed:localStorage.getItem('hexpour:completed-levels')})`);
