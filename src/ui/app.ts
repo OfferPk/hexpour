@@ -120,6 +120,13 @@ export function mountApp(root: HTMLElement): void {
     toastTimeout = window.setTimeout(() => el.toast.classList.remove('show'), 1600);
   }
 
+  function clearToast(): void {
+    window.clearTimeout(toastTimeout);
+    toastTimeout = 0;
+    el.toast.classList.remove('show');
+    el.toast.textContent = '';
+  }
+
   function showModalStubConfirm(
     title: string,
     body: string,
@@ -789,6 +796,7 @@ export function mountApp(root: HTMLElement): void {
       refreshCellControls();
       return;
     }
+    clearToast();
     selected = null;
     hint = null;
     updateMoveStatus();
@@ -921,6 +929,7 @@ export function mountApp(root: HTMLElement): void {
       showToast('Nothing to undo');
       return;
     }
+    clearToast();
     board = undoStack.pop()!;
     selected = null;
     hint = null;

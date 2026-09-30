@@ -103,10 +103,14 @@ const stateExpression = `(() => {
     legalLabel:legal?.getAttribute('aria-label'), legalVisual:legal?.classList.contains('legal-target'),
     selectionText:selectionStatus?.textContent, selectionRole:selectionStatus?.getAttribute('role'), selectionLive:selectionStatus?.getAttribute('aria-live'), selectionAtomic:selectionStatus?.getAttribute('aria-atomic'),
     toastText:toast?.textContent, toastRole:toast?.getAttribute('role'), toastLive:toast?.getAttribute('aria-live'), toastAtomic:toast?.getAttribute('aria-atomic'),
-    moveStatus:play.querySelector('.move-status')?.textContent, undoDisabled:undo?.disabled,
+    toastShown:toast?.classList.contains('show'),
+    moveStatus:play.querySelector('.move-status')?.textContent,
+    moveStatusLive:play.querySelector('.move-status')?.getAttribute('aria-live'),
+    moveStatusAtomic:play.querySelector('.move-status')?.getAttribute('aria-atomic'),
+    undoDisabled:undo?.disabled,
     settings:w.localStorage.getItem('hexpour_v1'), progress:w.localStorage.getItem('hexpour:in-progress'),
     board:controls.map(b=>[normalize(b.getAttribute('aria-label')),b.disabled]),
-    activeCell:controls.indexOf(d.activeElement), canvasHash,
+    activeCell:controls.indexOf(d.activeElement), activeCellLabel:d.activeElement?.getAttribute('aria-label'), canvasHash,
   };
 })()`;
 
@@ -195,7 +199,7 @@ try {
   await waitFor(`(() => document.querySelector('#game')?.contentDocument?.querySelector('#play.screen.active details.accessible-board')?.open)()`, 'the accessible cell controls');
 
   const initial = await evaluate(stateExpression);
-  if (initial.level !== 'Level 11' || !initial.sourceLabel?.includes('tokens bottom to top red, red, blue') ||
+  if (initial.level !== 'Level 11' || !initial.sourceLabel?.includes('bottom to top red, red, blue') ||
       !initial.holeLabel?.includes('blocked hole') || initial.holeDisabled !== true ||
       !initial.legalLabel?.includes('empty') || initial.moveStatus !== 'Pours: 0' ||
       initial.undoDisabled !== true || initial.settings !== settingsSeed || initial.progress !== null) {
@@ -256,8 +260,57 @@ try {
   const savedProgress = afterLegal.progress ? JSON.parse(afterLegal.progress) : null;
   if (afterLegal.undoDisabled !== false || afterLegal.settings !== initial.settings ||
       savedProgress?.levelId !== 11 || savedProgress?.moveCount !== 1 ||
-      afterLegal.sourceLabel?.includes('blue') || !afterLegal.legalLabel?.includes('blue')) {
+      afterLegal.sourceLabel?.includes('blue') || !afterLegal.legalLabel?.includes('blue') ||
+      afterLegal.toastText !== '' || afterLegal.toastShown ||
+      afterLegal.moveStatus !== 'Pours: 1' || afterLegal.moveStatusLive !== 'polite' ||
+      afterLegal.moveStatusAtomic !== 'true' ||
+      !afterLegal.activeCellLabel?.startsWith('Hex cell q 1, r -1:')) {
     throw new Error(`Legal pour/save behavior failed: ${JSON.stringify(afterLegal)}`);
+  }
+
+  const selectedBeforeBlockedUndo = await evaluate(`(() => { const d=document.querySelector('#game').contentDocument; const b=[...d.querySelectorAll('#play.screen.active .cell-control')].find(x=>x.getAttribute('aria-label')?.startsWith('Hex cell q 0, r 0:')); b?.focus(); return d.activeElement===b; })()`);
+  if (!selectedBeforeBlockedUndo) throw new Error('Could not focus the source for invalid-to-Undo coverage.');
+  await pressEnter();
+  await waitFor(`(() => { const d=document.querySelector('#game')?.contentDocument; const b=[...d?.querySelectorAll('#play.screen.active .cell-control')||[]].find(x=>x.getAttribute('aria-label')?.startsWith('Hex cell q 0, r 0:')); return b?.getAttribute('aria-pressed')==='true'; })()`, 'source selection before invalid-to-Undo');
+  const blockedBeforeUndoPointer = await evaluate(`(() => {
+    const frame=document.querySelector('#game'), d=frame.contentDocument, w=frame.contentWindow;
+    const wrap=d.querySelector('#play.screen.active .play-canvas-wrap'), canvas=wrap.querySelector('canvas');
+    const controls=[...d.querySelectorAll('#play.screen.active .cell-control')];
+    const coords=controls.map(b=>{const m=b.getAttribute('aria-label')?.match(/^Hex cell q (-?\\d+), r (-?\\d+):/);return m?{q:+m[1],r:+m[2]}:null}).filter(Boolean);
+    const px=(q,r,s)=>({x:s*1.5*q,y:s*(Math.sqrt(3)/2*q+Math.sqrt(3)*r)});
+    const probe=20,points=coords.map(c=>px(c.q,c.r,probe));
+    const minX=Math.min(...points.map(p=>p.x)),maxX=Math.max(...points.map(p=>p.x));
+    const minY=Math.min(...points.map(p=>p.y)),maxY=Math.max(...points.map(p=>p.y));
+    const cw=wrap.clientWidth,ch=wrap.clientHeight,bw=maxX-minX+40,bh=maxY-minY+40;
+    const size=Math.min((cw-32)/(bw/probe),(ch-32)/(bh/probe));
+    const positions=coords.map(c=>px(c.q,c.r,size));
+    const ox=cw/2-positions.reduce((sum,p)=>sum+p.x,0)/positions.length;
+    const oy=ch/2-positions.reduce((sum,p)=>sum+p.y,0)/positions.length;
+    const target=px(-1,1,size),rect=canvas.getBoundingClientRect();
+    canvas.dispatchEvent(new w.PointerEvent('pointerup',{bubbles:true,clientX:rect.left+ox+target.x,clientY:rect.top+oy+target.y,pointerId:1,pointerType:'mouse',isPrimary:true}));
+    return true;
+  })()`);
+  if (!blockedBeforeUndoPointer) throw new Error('Could not repeat the blocked-hole interaction before Undo.');
+  await new Promise((resolveWait) => setTimeout(resolveWait, 100));
+  const beforeUndoBlocked = await evaluate(stateExpression);
+  if (beforeUndoBlocked.toastText !== 'Blocked cell' || beforeUndoBlocked.toastRole !== 'status' ||
+      beforeUndoBlocked.toastLive !== 'polite' || beforeUndoBlocked.toastAtomic !== 'true' ||
+      beforeUndoBlocked.undoDisabled !== false || beforeUndoBlocked.moveStatus !== 'Pours: 1' ||
+      beforeUndoBlocked.progress !== afterLegal.progress ||
+      JSON.stringify(beforeUndoBlocked.board) !== JSON.stringify(afterLegal.board) ||
+      !beforeUndoBlocked.sourceSelected || beforeUndoBlocked.activeCell < 0 ||
+      beforeUndoBlocked.settings !== initial.settings) {
+    throw new Error(`Invalid move changed the prior legal move, Undo history, save, or focus: ${JSON.stringify(beforeUndoBlocked)}`);
+  }
+  await new Promise((resolveWait) => setTimeout(resolveWait, 1700));
+  const afterTimeout = await evaluate(stateExpression);
+  if (afterTimeout.toastShown || afterTimeout.toastText !== 'Blocked cell' ||
+      afterTimeout.toastRole !== 'status' || afterTimeout.toastLive !== 'polite' ||
+      afterTimeout.undoDisabled !== false || afterTimeout.moveStatus !== 'Pours: 1' ||
+      afterTimeout.progress !== afterLegal.progress ||
+      JSON.stringify(afterTimeout.board) !== JSON.stringify(afterLegal.board) ||
+      afterTimeout.activeCell < 0 || afterTimeout.settings !== initial.settings) {
+    throw new Error(`The 1.6-second toast timeout or game-state preservation failed: ${JSON.stringify(afterTimeout)}`);
   }
 
   const focusedUndo = await evaluate(`(() => { const d=document.querySelector('#game').contentDocument; const b=[...d.querySelectorAll('#play.screen.active .toolbar button')].find(x=>x.textContent.trim()==='Undo'); b?.focus(); return d.activeElement===b; })()`);
@@ -266,12 +319,16 @@ try {
   await waitFor(`(() => { const d=document.querySelector('#game')?.contentDocument; const b=[...d.querySelectorAll('#play.screen.active .cell-control')].find(x=>x.getAttribute('aria-label')?.startsWith('Hex cell q 0, r 0:')); return d?.querySelector('#play.screen.active .move-status')?.textContent==='Pours: 0' && d.defaultView.localStorage.getItem('hexpour:in-progress')===null && b?.getAttribute('aria-label')?.includes('red, red, blue'); })()`, 'Undo restoring the source stack and clearing the in-progress snapshot');
   const afterUndo = await evaluate(stateExpression);
   if (afterUndo.undoDisabled !== true || afterUndo.settings !== initial.settings || afterUndo.progress !== null ||
+      afterUndo.toastText !== '' || afterUndo.toastShown ||
+      JSON.stringify(afterUndo.board) !== JSON.stringify(initial.board) ||
       !afterUndo.sourceLabel?.includes('red, red, blue') || !afterUndo.legalLabel?.includes('empty')) {
     throw new Error(`Undo did not restore the original board/save/settings: ${JSON.stringify(afterUndo)}`);
   }
 
-  console.log('PASS blocked destination preserves source selection, live status, visual targets, save state, and focus.');
-  console.log('PASS legal pour succeeds without reselection; Undo restores the exact board and removes its snapshot.');
+  console.log('PASS invalid feedback uses a polite status region and preserves selection, board, focus, save, and Undo.');
+  console.log('PASS legal pour clears stale feedback and updates the existing polite pour-count region while preserving destination focus and save state.');
+  console.log('PASS invalid-to-Undo preserves history, Undo restores the exact board and clears the save and stale status.');
+  console.log('PASS blocked feedback visually expires after 1.6 seconds without mutating board, focus, save, settings, or Undo.');
   console.log('PASS unlock/settings storage is unchanged through the interaction sequence.');
   console.log(`Local-only origin: http://127.0.0.1:${address.port}/hexpour/`);
 } catch (error) {
