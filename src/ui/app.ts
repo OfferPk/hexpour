@@ -152,6 +152,15 @@ export function mountApp(root: HTMLElement): void {
     no: string,
   ): Promise<boolean> {
     return new Promise((resolve) => {
+      const returnFocus = document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+      const close = (result: boolean) => {
+        el.overlay.className = 'overlay';
+        el.overlay.innerHTML = '';
+        if (returnFocus?.isConnected) returnFocus.focus();
+        resolve(result);
+      };
       el.overlay.className = 'overlay open';
       el.overlay.innerHTML = '';
       const modal = div('modal');
@@ -164,14 +173,10 @@ export function mountApp(root: HTMLElement): void {
       row.style.gap = '8px';
       row.append(
         button(no, 'btn secondary', () => {
-          el.overlay.className = 'overlay';
-          el.overlay.innerHTML = '';
-          resolve(false);
+          close(false);
         }),
         button(yes, 'btn', () => {
-          el.overlay.className = 'overlay';
-          el.overlay.innerHTML = '';
-          resolve(true);
+          close(true);
         }),
       );
       modal.append(row);
