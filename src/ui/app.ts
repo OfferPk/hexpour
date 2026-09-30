@@ -270,7 +270,13 @@ export function mountApp(root: HTMLElement): void {
       text += ` · unlocked through ${persist.unlocked}`;
     }
     if (typeof navigator.share === 'function') {
-      void navigator.share({ title: 'HexPour', text }).catch(() => {
+      void navigator.share({ title: 'HexPour', text }).catch((error: unknown) => {
+        if (
+          error !== null &&
+          typeof error === 'object' &&
+          'name' in error &&
+          error.name === 'AbortError'
+        ) return;
         copyShare(text);
       });
       return;

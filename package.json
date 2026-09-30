@@ -16,6 +16,7 @@
     "test:browser:first-play-focus": "node scripts/test-first-play-focus-browser.mjs",
     "test:browser:hint-undo": "node scripts/test-hint-undo-accessibility-browser.mjs",
     "test:browser:level40-terminal": "node scripts/test-level40-terminal-browser.mjs",
+    "test:browser:share-cancel": "node scripts/test-share-cancel-browser.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },
