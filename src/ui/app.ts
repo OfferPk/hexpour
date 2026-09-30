@@ -584,6 +584,9 @@ export function mountApp(root: HTMLElement): void {
       button(persist.mute ? '🔇' : '🔊', 'btn ghost', () => {
         persist = savePersist({ mute: !persist.mute });
         renderLevels();
+        el.levels.querySelector<HTMLButtonElement>(
+          '.topbar button[aria-label="Mute"], .topbar button[aria-label="Unmute"]',
+        )?.focus();
       }, persist.mute ? 'Unmute' : 'Mute'),
     );
     const grid = div('level-grid');
