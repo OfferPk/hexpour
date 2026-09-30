@@ -96,6 +96,41 @@
           };
         }
 
+        function testBoardCueLegend(gameWindow, gameDocument) {
+          const legend = gameDocument.querySelector('.cue-legend');
+          const wrapper = gameDocument.querySelector('.play-canvas-wrap');
+          const moveStatus = gameDocument.querySelector('.move-status');
+          const items = Array.from(legend?.querySelectorAll('.cue-legend-item') || []);
+          const labels = items.map((item) => item.textContent.trim());
+          const expected = [
+            'Selected source — double outline',
+            'Legal destination — dashed outline + check',
+            'Blocked neighbor — X mark',
+            'Blocked cell — diagonal hatch',
+          ];
+          if (!legend || legend.getAttribute('role') !== 'group' ||
+              legend.getAttribute('aria-label') !== 'Board mark legend' ||
+              labels.length !== expected.length || labels.some((label, index) => label !== expected[index])) {
+            throw new Error(`The accessible board-mark legend is missing or unclear: ${labels.join(' | ')}`);
+          }
+          if (items.some((item) => item.querySelector('.cue-legend-marker')?.getAttribute('aria-hidden') !== 'true')) {
+            throw new Error('Decorative marker swatches must be hidden from assistive technology');
+          }
+
+          const legendBounds = assertVisibleInViewport(legend, 'The board-mark legend', gameWindow);
+          const legendRect = legend.getBoundingClientRect();
+          const canvasRect = wrapper.getBoundingClientRect();
+          const statusRect = moveStatus.getBoundingClientRect();
+          if (gameWindow.getComputedStyle(legend).position !== 'static' ||
+              legendRect.top < statusRect.bottom - 1 || legendRect.bottom > canvasRect.top + 1) {
+            throw new Error('The board-mark legend must stay in flow between status and canvas, not cover the board');
+          }
+          if (canvasRect.height < 100) {
+            throw new Error(`The board canvas is too short beneath the legend (${canvasRect.height}px)`);
+          }
+          return { bounds: legendBounds, canvasHeight: Math.round(canvasRect.height), itemCount: labels.length };
+        }
+
         function canvasFingerprint(context, canvas) {
           const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
           let hash = 2166136261;
@@ -534,6 +569,7 @@
           const initialToolbarBounds = assertVisibleInViewport(toolbar, 'The toolbar', gameWindow);
           const initialHintBounds = assertVisibleInViewport(freeHintButton, 'The free Hint control', gameWindow);
           const initialSummaryBounds = assertVisibleInViewport(summary, 'The cell-controls summary', gameWindow);
+          const initialLegend = testBoardCueLegend(gameWindow, gameDocument);
 
           await wait(100);
           const collapsedBefore = captureCanvas(gameWindow, gameDocument, 'collapsed-before');
@@ -546,6 +582,7 @@
             'the expanded-panel canvas resize',
           );
           const expandedSummaryBounds = assertVisibleInViewport(summary, 'The expanded cell-controls summary', gameWindow);
+          const expandedLegend = testBoardCueLegend(gameWindow, gameDocument);
           await wait(80);
           const expanded = captureCanvas(gameWindow, gameDocument, 'expanded');
 
@@ -622,6 +659,7 @@
             accessibleCellControls: cellControls.length,
             toolbarBounds: initialToolbarBounds,
             hintButtonBounds: initialHintBounds,
+            boardLegend: { initial: initialLegend, withControlsExpanded: expandedLegend },
             disclosureBounds: { collapsed: initialSummaryBounds, expanded: expandedSummaryBounds },
             redrawVerifiedByPaintedPixels: true,
             interactions,

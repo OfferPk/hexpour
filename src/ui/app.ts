@@ -37,6 +37,7 @@ import {
 } from '../ads/stubs';
 import { cellAccessibleLabel } from './cellLabel';
 import { formatPourCount } from './pourCount';
+import { BOARD_CUE_LEGEND } from './boardLegend';
 import {
   createCanvasResizeHandler,
   observeElementResize,
@@ -452,6 +453,28 @@ export function mountApp(root: HTMLElement): void {
     wrap.append(canvas);
     ctx = canvas.getContext('2d')!;
 
+    const legend = div('cue-legend');
+    legend.setAttribute('role', 'group');
+    legend.setAttribute('aria-label', 'Board mark legend');
+    const legendTitle = document.createElement('span');
+    legendTitle.className = 'cue-legend-title';
+    legendTitle.textContent = 'Board marks';
+    const legendItems = document.createElement('ul');
+    legendItems.className = 'cue-legend-items';
+    for (const cue of BOARD_CUE_LEGEND) {
+      const item = document.createElement('li');
+      item.className = 'cue-legend-item';
+      const marker = document.createElement('span');
+      marker.className = `cue-legend-marker ${cue.markerClass}`;
+      marker.setAttribute('aria-hidden', 'true');
+      const text = document.createElement('span');
+      text.className = 'cue-legend-text';
+      text.textContent = `${cue.label} — ${cue.description}`;
+      item.append(marker, text);
+      legendItems.append(item);
+    }
+    legend.append(legendTitle, legendItems);
+
     const tools = div('toolbar');
     undoButton = button('Undo', 'btn secondary', () => doUndo());
     refreshUndoButton();
@@ -485,7 +508,7 @@ export function mountApp(root: HTMLElement): void {
       grid.append(control);
     }
     controls.append(summary, instructions, grid);
-    el.play.append(top, moveStatus, selectionStatus, wrap, tools, controls);
+    el.play.append(top, moveStatus, selectionStatus, legend, wrap, tools, controls);
     refreshCellControls();
 
     const resize = createCanvasResizeHandler(

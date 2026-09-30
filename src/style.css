@@ -290,6 +290,93 @@ summary:focus-visible {
   padding: 1px 0 5px;
 }
 
+.cue-legend {
+  flex: 0 0 auto;
+  display: grid;
+  gap: 3px;
+  margin: 2px 2px 0;
+  color: var(--muted);
+}
+.cue-legend-title {
+  color: var(--cream);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+.cue-legend-items {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px 9px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.cue-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 0.66rem;
+  line-height: 1.2;
+}
+.cue-legend-text { min-width: 0; }
+.cue-legend-marker {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 16px;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--cream);
+}
+.cue-legend-marker--source::before,
+.cue-legend-marker--source::after {
+  position: absolute;
+  content: "";
+  background: currentColor;
+  clip-path: polygon(50% 0, 94% 25%, 94% 75%, 50% 100%, 6% 75%, 6% 25%);
+}
+.cue-legend-marker--source::before { inset: 0; }
+.cue-legend-marker--source::after {
+  inset: 4px;
+  background: var(--bg);
+}
+.cue-legend-marker--legal::before {
+  position: absolute;
+  inset: 2px;
+  border: 1px dashed currentColor;
+  content: "";
+}
+.cue-legend-marker--legal::after {
+  position: absolute;
+  content: "✓";
+  padding: 0 1px;
+  background: var(--bg);
+  font-size: 0.62rem;
+  font-weight: 800;
+  line-height: 1;
+}
+.cue-legend-marker--blocked::before {
+  content: "×";
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.cue-legend-marker--hatch {
+  width: 15px;
+  height: 13px;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  background: repeating-linear-gradient(
+    135deg,
+    transparent 0 3px,
+    currentColor 3px 4px
+  );
+}
+
 .screen-reader-status {
   position: absolute;
   width: 1px;
@@ -370,6 +457,28 @@ summary:focus-visible {
 .cell-control:disabled {
   opacity: 0.55;
   cursor: default;
+}
+
+@media (max-height: 420px) and (min-width: 480px) {
+  .cue-legend { gap: 0; }
+  .cue-legend-title { display: none; }
+  .cue-legend-items {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 2px 5px;
+  }
+  .cue-legend-item {
+    align-items: flex-start;
+    gap: 3px;
+    font-size: 0.68rem;
+  }
+  .cue-legend-marker {
+    flex-basis: 14px;
+    width: 14px;
+    height: 14px;
+  }
+  .cue-legend-marker--hatch { width: 13px; height: 11px; }
+  .accessible-board { max-height: 18vh; }
+  .cell-control-grid { max-height: 12vh; }
 }
 
 @media (prefers-reduced-motion: reduce) {
