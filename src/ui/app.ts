@@ -13,8 +13,10 @@ import {
 import {
   A2HS_KEY,
   isHowtoSeen,
+  isLevelComplete,
   loadPersist,
   markHowtoSeen,
+  markLevelComplete,
   savePersist,
   unlockLevel,
   type PersistData,
@@ -541,7 +543,7 @@ export function mountApp(root: HTMLElement): void {
     const grid = div('level-grid');
     for (let i = 1; i <= LEVEL_COUNT; i++) {
       const locked = i > persist.unlocked;
-      const done = i < persist.unlocked;
+      const done = i < persist.unlocked || isLevelComplete(i);
       const progress = !locked && savedProgress?.levelId === i ? savedProgress : null;
       const b = document.createElement('button');
       b.className = 'level-btn' + (locked ? ' locked' : '') + (done ? ' done' : '');
@@ -1093,6 +1095,7 @@ export function mountApp(root: HTMLElement): void {
       persist = unlockLevel(next);
     } else {
       // all done — keep unlocked at 40
+      markLevelComplete(levelId);
       persist = unlockLevel(LEVEL_COUNT);
     }
     setScreen('win');
@@ -1145,7 +1148,10 @@ export function mountApp(root: HTMLElement): void {
       );
     } else {
       actions.append(
-        button('All 40 clear — Replay', 'btn block', () => startLevel(1)),
+        button('All 40 clear — Replay', 'btn block', () => {
+          startLevel(1);
+          focusPlayControls();
+        }),
       );
     }
     actions.append(

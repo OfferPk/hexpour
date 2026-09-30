@@ -78,6 +78,43 @@ export function unlockLevel(levelId: number): PersistData {
   return cur;
 }
 
+const COMPLETED_LEVELS_KEY = 'hexpour:completed-levels';
+
+export function isLevelComplete(levelId: number): boolean {
+  if (!Number.isSafeInteger(levelId) || levelId < 1 || levelId > UNLOCKED_MAX) return false;
+  try {
+    const raw = localStorage.getItem(COMPLETED_LEVELS_KEY);
+    if (!raw) return false;
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.includes(levelId);
+  } catch {
+    return false;
+  }
+}
+
+export function markLevelComplete(levelId: number): void {
+  if (!Number.isSafeInteger(levelId) || levelId < 1 || levelId > UNLOCKED_MAX) return;
+  let parsed: unknown = [];
+  try {
+    const raw = localStorage.getItem(COMPLETED_LEVELS_KEY);
+    parsed = raw ? JSON.parse(raw) : [];
+  } catch {
+    parsed = [];
+  }
+  const completed = Array.isArray(parsed)
+    ? parsed.filter((id): id is number =>
+        Number.isSafeInteger(id) && id >= 1 && id <= UNLOCKED_MAX,
+      )
+    : [];
+  if (!completed.includes(levelId)) completed.push(levelId);
+  completed.sort((a, b) => a - b);
+  try {
+    localStorage.setItem(COMPLETED_LEVELS_KEY, JSON.stringify(completed));
+  } catch {
+    /* Storage may be disabled or full. */
+  }
+}
+
 export function getSettings(): PersistData {
   return readRaw();
 }
