@@ -348,7 +348,8 @@
           await pauseForKeyboard('enter-hint');
           const toast = gameDocument.querySelector('.toast[role="status"]');
           await waitFor(
-            () => toast?.textContent === 'Hint highlighted' && toast.classList.contains('show'),
+            () => /^Hint highlighted: pour from Hex cell q -?\d+, r -?\d+ to Hex cell q -?\d+, r -?\d+\.$/.test(toast?.textContent ?? '') &&
+              toast.classList.contains('show'),
             'accessible Hint feedback',
           );
           if (hint.textContent.trim() !== 'Hint: ad' ||

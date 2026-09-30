@@ -91,6 +91,7 @@ export function mountApp(root: HTMLElement): void {
   let undoButton: HTMLButtonElement | null = null;
   let hintButton: HTMLButtonElement | null = null;
   let restartButton: HTMLButtonElement | null = null;
+  let boardControlsSummary: HTMLElement | null = null;
   let toastTimeout = 0;
   let toastGeneration = 0;
 
@@ -663,6 +664,7 @@ export function mountApp(root: HTMLElement): void {
     undoButton = null;
     selectionStatus = null;
     restartButton = null;
+    boardControlsSummary = null;
     if (!board) return;
     el.play.innerHTML = '';
     const top = div('topbar');
@@ -729,6 +731,7 @@ export function mountApp(root: HTMLElement): void {
     const controls = document.createElement('details');
     controls.className = 'accessible-board';
     const summary = document.createElement('summary');
+    boardControlsSummary = summary;
     summary.textContent = 'Keyboard and screen reader controls';
     const instructions = document.createElement('p');
     instructions.textContent =
@@ -977,6 +980,9 @@ export function mountApp(root: HTMLElement): void {
       showToast('Nothing to undo');
       return;
     }
+    const previousFocus = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
     clearToast();
     board = undoStack.pop()!;
     selected = null;
@@ -989,6 +995,20 @@ export function mountApp(root: HTMLElement): void {
       const def = getLevel(levelId);
       if (def) saveInProgress(def, board, undoStack);
     }
+    let focusTarget: HTMLElement | null = null;
+    if (previousFocus === undoButton && (undoButton === null || undoButton.disabled)) {
+      focusTarget = boardControlsSummary;
+    } else if (
+      previousFocus?.isConnected &&
+      !(previousFocus instanceof HTMLButtonElement && previousFocus.disabled)
+    ) {
+      focusTarget = previousFocus;
+    } else if (undoButton && !undoButton.disabled) {
+      focusTarget = undoButton;
+    } else {
+      focusTarget = boardControlsSummary;
+    }
+    focusTarget?.focus();
   }
 
   function refreshHintButton(): void {
@@ -1026,7 +1046,9 @@ export function mountApp(root: HTMLElement): void {
     hint = h;
     selected = null;
     refreshCellControls();
-    showToast('Hint highlighted');
+    const source = `Hex cell q ${h.from.q}, r ${h.from.r}`;
+    const destination = `Hex cell q ${h.to.q}, r ${h.to.r}`;
+    showToast(`Hint highlighted: pour from ${source} to ${destination}.`);
   }
 
   function closeRestartConfirmation(): void {

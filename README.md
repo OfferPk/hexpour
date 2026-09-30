@@ -76,6 +76,7 @@ npm run test:browser:viewport
 npm run test:browser:blocked
 npm run test:browser:level-select
 npm run test:browser:selection-cancel
+npm run test:browser:hint-undo
 npm run test:browser:level40-terminal
 ```
 
@@ -90,6 +91,8 @@ Covers hex neighbors, legal/illegal pours, win detection, ad stubs, descriptive 
 `npm run test:browser:selection-cancel` uses a fresh disposable Chromium profile to test keyboard source selection, Escape-only deselection with focus preservation and byte-for-byte saved-state preservation, reselection, and a subsequent legal Level 2 pour. Set `HEXPOUR_TEST_URL` to run it against the live site in a separate fresh profile.
 
 `npm run test:browser:first-play-focus` uses a new empty disposable Chromium profile to verify first-run How-to focus, modal Tab containment, Home tab order, keyboard dismissal and Start activation, focus visibility/transfer into board controls, and no unintended saved puzzle/settings/unlock state. It verifies the profile and browser storage are empty before any test interaction, removes the profile afterward, and checks DOM/accessibility attributes only; it does not test spoken output.
+
+`npm run test:browser:hint-undo` uses a new empty disposable Chromium profile and keyboard-only controls to verify that Level 39 Hint names both highlighted cells in the existing polite status, consumes only its free use, and that Undo restores the exact board and saved state while returning focus to the board-controls disclosure when Undo becomes disabled. Set `HEXPOUR_TEST_URL` to repeat the same check against a live deployment and verify its current hashed JavaScript and CSS assets. It checks browser/DOM behavior only and does not test spoken output.
 
 `npm run test:browser:level40-terminal` uses a new empty disposable Chromium profile and a valid-inventory Level 40 near-win fixture to check final completion, the 40-level unlock ceiling, saved-state cleanup, Level 40’s completed label, and keyboard focus after Replay. The fixture is seeded only into the temporary profile; it is not a production debug route or a claim of completing all 40 levels.
 
