@@ -58,6 +58,7 @@ export function mountApp(root: HTMLElement): void {
   let cleanupPlay: (() => void) | null = null;
   let moveStatus: HTMLDivElement | null = null;
   let cellButtons = new Map<string, HTMLButtonElement>();
+  let hintButton: HTMLButtonElement | null = null;
   let toastTimeout = 0;
 
   const el = {
@@ -437,9 +438,13 @@ export function mountApp(root: HTMLElement): void {
     ctx = canvas.getContext('2d')!;
 
     const tools = div('toolbar');
+    const undoButton = button('Undo', 'btn secondary', () => doUndo());
+    const hintControl = button('Hint', 'btn secondary', () => void doHint());
+    hintButton = hintControl;
+    refreshHintButton();
     tools.append(
-      button('Undo', 'btn secondary', () => doUndo()),
-      button('Hint', 'btn secondary', () => void doHint()),
+      undoButton,
+      hintControl,
       button('Restart', 'btn ghost', () => doRestart()),
     );
 
@@ -593,10 +598,23 @@ export function mountApp(root: HTMLElement): void {
     refreshCellControls();
   }
 
+  function refreshHintButton(): void {
+    if (!hintButton) return;
+    const hasFreeHint = freeHintsLeft > 0;
+    hintButton.textContent = hasFreeHint ? 'Hint: free' : 'Hint: ad';
+    hintButton.setAttribute(
+      'aria-label',
+      hasFreeHint
+        ? 'Hint. One free hint remaining.'
+        : 'Hint. No free hints remain; opens the rewarded-ad prompt.',
+    );
+  }
+
   async function doHint(): Promise<void> {
     if (!board) return;
     if (freeHintsLeft > 0) {
       freeHintsLeft--;
+      refreshHintButton();
       applyHint();
       return;
     }

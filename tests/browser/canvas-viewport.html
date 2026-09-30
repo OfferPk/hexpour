@@ -222,9 +222,13 @@
             (button) => button.textContent.trim() === 'Undo',
           );
           const hint = Array.from(gameDocument.querySelectorAll('.toolbar button')).find(
-            (button) => button.textContent.trim() === 'Hint',
+            (button) => button.getAttribute('aria-label') === 'Hint. One free hint remaining.',
           );
           if (!undo || !hint) throw new Error('Undo or Hint control is missing');
+          if (hint.textContent.trim() !== 'Hint: free') {
+            throw new Error('The Hint button does not show that its next use is free');
+          }
+          assertVisibleInViewport(hint, 'The free Hint control', gameWindow);
 
           undo.focus();
           await pauseForKeyboard('enter-undo');
@@ -250,6 +254,13 @@
             () => toast?.textContent === 'Hint highlighted' && toast.classList.contains('show'),
             'accessible Hint feedback',
           );
+          if (hint.textContent.trim() !== 'Hint: ad' ||
+              hint.getAttribute('aria-label') !== 'Hint. No free hints remain; opens the rewarded-ad prompt.') {
+            throw new Error('The Hint button did not explain the rewarded prompt after its free use');
+          }
+          assertVisibleInViewport(hint, 'The rewarded Hint control', gameWindow);
+          assertVisibleInViewport(gameDocument.querySelector('.toolbar'), 'The toolbar after Hint label change', gameWindow);
+          assertVisibleInViewport(summary, 'The controls disclosure after Hint label change', gameWindow);
           flushFrame();
           const afterHint = canvasFingerprint(context, canvas);
           if (beforeHint === afterHint) {
@@ -326,7 +337,14 @@
           if (cellControls.length !== 3 || cellControls.some((button) => !button.getAttribute('aria-label'))) {
             throw new Error('Level 2 must expose three labeled accessible cell controls');
           }
+          const freeHintButton = Array.from(toolbar.querySelectorAll('button')).find(
+            (button) => button.getAttribute('aria-label') === 'Hint. One free hint remaining.',
+          );
+          if (!freeHintButton || freeHintButton.textContent.trim() !== 'Hint: free') {
+            throw new Error('The play screen does not disclose the free Hint before activation');
+          }
           const initialToolbarBounds = assertVisibleInViewport(toolbar, 'The toolbar', gameWindow);
+          const initialHintBounds = assertVisibleInViewport(freeHintButton, 'The free Hint control', gameWindow);
           const initialSummaryBounds = assertVisibleInViewport(summary, 'The cell-controls summary', gameWindow);
 
           await wait(100);
@@ -374,6 +392,27 @@
           if (collapsedAfter.wrapper.height <= expanded.wrapper.height) {
             throw new Error('Closing the panel did not restore canvas space');
           }
+          if (interactions) {
+            const restart = Array.from(gameDocument.querySelectorAll('.toolbar button')).find(
+              (button) => button.textContent.trim() === 'Restart',
+            );
+            if (!restart) throw new Error('Restart control is missing after Hint use');
+            restart.click();
+            await waitFor(
+              () => gameDocument.querySelector('.topbar .title')?.textContent.trim() === 'Level 2' &&
+                gameDocument.querySelector('.move-status')?.textContent === 'Pours: 0' &&
+                Array.from(gameDocument.querySelectorAll('.toolbar button')).some(
+                  (button) => button.getAttribute('aria-label') === 'Hint. One free hint remaining.' &&
+                    button.textContent.trim() === 'Hint: free',
+                ),
+              'Restart to restore the free Hint affordance',
+            );
+            const resetHintButton = Array.from(gameDocument.querySelectorAll('.toolbar button')).find(
+              (button) => button.getAttribute('aria-label') === 'Hint. One free hint remaining.',
+            );
+            assertVisibleInViewport(resetHintButton, 'The reset free Hint control', gameWindow);
+            interactions.restartRestoresFreeHint = true;
+          }
           if (interceptedAnimationFrames === 0) {
             throw new Error('The play animation loop was not intercepted for deterministic redraw testing');
           }
@@ -384,6 +423,7 @@
             requestAnimationFramesIntercepted: interceptedAnimationFrames,
             accessibleCellControls: cellControls.length,
             toolbarBounds: initialToolbarBounds,
+            hintButtonBounds: initialHintBounds,
             disclosureBounds: { collapsed: initialSummaryBounds, expanded: expandedSummaryBounds },
             redrawVerifiedByPaintedPixels: true,
             interactions,
