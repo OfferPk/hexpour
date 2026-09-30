@@ -20,6 +20,7 @@ import {
   type PersistData,
 } from '../game/persist';
 import type { Axial, BoardState } from '../game/types';
+import { areAdjacent } from '../game/hex';
 import { LEVEL_COUNT, getLevel } from '../levels/index';
 import {
   computeLayout,
@@ -50,6 +51,10 @@ export function mountApp(root: HTMLElement): void {
   let board: BoardState | null = null;
   let undoStack: BoardState[] = [];
   let selected: Axial | null = null;
+  let legalDestinationKeys = new Set<string>();
+  let blockedNeighborKeys = new Set<string>();
+  let selectedLegalDestinations: Axial[] = [];
+  let selectedBlockedNeighbors: Axial[] = [];
   let hint: { from: Axial; to: Axial } | null = null;
   let freeHintsLeft = 1;
   let layout: BoardLayout | null = null;
@@ -559,13 +564,45 @@ export function mountApp(root: HTMLElement): void {
 
   function refreshCellControls(): void {
     if (!board) return;
+    const selectedSource = selected;
+    selectedLegalDestinations = selectedSource
+      ? listLegalPours(board)
+          .filter(({ from }) => from.q === selectedSource.q && from.r === selectedSource.r)
+          .map(({ to }) => to)
+      : [];
+    legalDestinationKeys = new Set(
+      selectedLegalDestinations.map(({ q, r }) => `${q},${r}`),
+    );
+    selectedBlockedNeighbors = selectedSource
+      ? Array.from(board.cells.values())
+          .filter((cell) => cell.blocked && areAdjacent(selectedSource, cell))
+          .map(({ q, r }) => ({ q, r }))
+      : [];
+    blockedNeighborKeys = new Set(
+      selectedBlockedNeighbors.map(({ q, r }) => `${q},${r}`),
+    );
+
     for (const [key, control] of cellButtons) {
       const cell = board.cells.get(key);
       if (!cell) continue;
       const active = selected?.q === cell.q && selected.r === cell.r;
-      control.setAttribute('aria-label', cellAccessibleLabel(cell));
+      const legalTarget = legalDestinationKeys.has(key);
+      const blockedNeighbor = blockedNeighborKeys.has(key);
+      const label = cellAccessibleLabel(cell);
+      control.setAttribute(
+        'aria-label',
+        active
+          ? `${label} Selected source. Press again to deselect.`
+          : legalTarget
+            ? `${label} Legal destination from selected source. Press to pour.`
+            : blockedNeighbor
+              ? `${label} Blocked adjacent cell. Cannot be used as a destination.`
+              : label,
+      );
       control.setAttribute('aria-pressed', String(active));
       control.classList.toggle('selected', active);
+      control.classList.toggle('legal-target', legalTarget);
+      control.classList.toggle('blocked-target', blockedNeighbor);
       control.disabled = cell.blocked;
     }
     updateSelectionStatus();
@@ -585,18 +622,21 @@ export function mountApp(root: HTMLElement): void {
       return;
     }
 
-    const destinations = listLegalPours(board)
-      .filter(({ from }) => from.q === selectedSource.q && from.r === selectedSource.r)
-      .map(({ to }) => `Hex cell q ${to.q}, r ${to.r}`);
-    const listedDestinations = destinations.length < 2
-      ? destinations[0] ?? ''
-      : `${destinations.slice(0, -1).join(', ')}, and ${destinations[destinations.length - 1]}`;
-    const destinationMessage = destinations.length === 0
+    const locations = (cells: Axial[]) => {
+      const names = cells.map(({ q, r }) => `Hex cell q ${q}, r ${r}`);
+      return names.length < 2
+        ? names[0] ?? ''
+        : `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
+    };
+    const destinationMessage = selectedLegalDestinations.length === 0
       ? 'No legal adjacent destinations.'
-      : `Available legal destination${destinations.length === 1 ? '' : 's'}: ${listedDestinations}.`;
+      : `Available legal destination${selectedLegalDestinations.length === 1 ? '' : 's'}: ${locations(selectedLegalDestinations)}.`;
+    const blockedMessage = selectedBlockedNeighbors.length === 0
+      ? ''
+      : ` Blocked adjacent cell${selectedBlockedNeighbors.length === 1 ? '' : 's'}: ${locations(selectedBlockedNeighbors)}.`;
 
     selectionStatus.textContent =
-      `Selected source: Hex cell q ${source.q}, r ${source.r}. ${destinationMessage}`;
+      `Selected source: Hex cell q ${source.q}, r ${source.r}. ${destinationMessage}${blockedMessage}`;
   }
 
   function updateMoveStatus(): void {
@@ -720,6 +760,8 @@ export function mountApp(root: HTMLElement): void {
     ctx.clearRect(0, 0, frameWidth, frameHeight);
     const selection: RenderSelection = {
       selected,
+      legalDestinationKeys,
+      blockedNeighborKeys,
       hint,
       shakeKey,
       shakeUntil,

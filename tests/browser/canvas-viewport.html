@@ -344,6 +344,128 @@
           };
         }
 
+        async function testKeyboardSelectionAffordances(gameWindow, gameDocument, pendingFrames) {
+          const back = gameDocument.querySelector('.topbar button[aria-label="Back to levels"]');
+          if (!back) throw new Error('Back to levels control is missing');
+
+          gameWindow.localStorage.setItem(
+            'hexpour_v1',
+            JSON.stringify({ unlocked: 40, adsRemoved: false, mute: false }),
+          );
+          back.click();
+          const levelEleven = await waitFor(
+            () => Array.from(gameDocument.querySelectorAll('.level-btn')).find(
+              (button) => button.textContent.trim() === '11',
+            ),
+            'Level 11 in the disposable level list',
+          );
+          levelEleven.click();
+          await waitFor(
+            () => gameDocument.querySelector('#play.screen.active .topbar .title')?.textContent.trim() === 'Level 11' &&
+              gameDocument.querySelector('details.accessible-board'),
+            'Level 11 keyboard controls',
+          );
+
+          const details = gameDocument.querySelector('details.accessible-board');
+          const summary = details.querySelector('summary');
+          if (!details.open) summary.click();
+          await waitFor(() => details.open, 'the Level 11 cell controls disclosure');
+          const controls = Array.from(details.querySelectorAll('button.cell-control'));
+          const cellAt = (q, r) => controls.find((button) =>
+            button.getAttribute('aria-label')?.startsWith(`Hex cell q ${q}, r ${r}:`),
+          );
+          const source = cellAt(0, 0);
+          const legal = cellAt(1, -1);
+          const blocked = cellAt(-1, 1);
+          const selectionStatus = gameDocument.querySelector('.screen-reader-status');
+          const canvas = gameDocument.querySelector('.play-canvas-wrap canvas');
+          const wrapper = gameDocument.querySelector('.play-canvas-wrap');
+          const context = canvas?.getContext('2d');
+          if (!source || !legal || !blocked || !selectionStatus || !canvas || !wrapper || !context) {
+            throw new Error('Level 11 legal source, target, blocked neighbor, or canvas is missing');
+          }
+          const scale = Math.min(gameWindow.devicePixelRatio || 1, 2);
+          await waitFor(
+            () => canvas.width === Math.floor(wrapper.clientWidth * scale) &&
+              canvas.height === Math.floor(wrapper.clientHeight * scale),
+            'the expanded Level 11 canvas backing size',
+          );
+          await wait(80);
+          const originalSourceLabel = source.getAttribute('aria-label');
+          const baselineFrame = pendingFrames.shift();
+          if (!baselineFrame) throw new Error('No animation frame was available for the Level 11 baseline');
+          baselineFrame(gameWindow.performance.now());
+          const baselineCanvas = canvasFingerprint(context, canvas);
+
+          source.focus();
+          await waitFor(() => gameDocument.activeElement === source, 'keyboard focus on Level 11 source');
+          await pauseForKeyboard('enter-level11-source');
+          const expectedAnnouncement =
+            'Selected source: Hex cell q 0, r 0. Available legal destinations: ' +
+            'Hex cell q 1, r -1, Hex cell q -1, r 0, and Hex cell q 0, r 1. ' +
+            'Blocked adjacent cell: Hex cell q -1, r 1.';
+          await waitFor(
+            () => source.getAttribute('aria-pressed') === 'true' &&
+              selectionStatus.textContent === expectedAnnouncement,
+            'keyboard source selection with legal and blocked neighboring cells announced',
+          );
+
+          if (!source.classList.contains('selected') ||
+              !source.getAttribute('aria-label')?.includes('Selected source. Press again to deselect.')) {
+            throw new Error('The selected source lacks a non-color or accessible selected-state cue');
+          }
+          if (!legal.classList.contains('legal-target') || legal.disabled ||
+              !legal.getAttribute('aria-label')?.includes('Legal destination from selected source.') ||
+              gameWindow.getComputedStyle(legal).borderTopStyle !== 'dashed') {
+            throw new Error('A legal destination lacks a distinct non-color destination cue');
+          }
+          if (!blocked.classList.contains('blocked-target') || !blocked.disabled ||
+              !blocked.getAttribute('aria-label')?.includes('Blocked adjacent cell. Cannot be used as a destination.') ||
+              gameWindow.getComputedStyle(blocked).borderTopStyle !== 'double') {
+            throw new Error('A blocked neighbor lacks a distinct blocked-state cue');
+          }
+
+          const selectedFrame = pendingFrames.shift();
+          if (!selectedFrame) throw new Error('No animation frame was available for the selected board');
+          selectedFrame(gameWindow.performance.now());
+          const selectedCanvas = canvasFingerprint(context, canvas);
+          if (selectedCanvas === baselineCanvas) {
+            throw new Error('Selecting a source did not visibly mark the canvas targets');
+          }
+
+          source.focus();
+          await pauseForKeyboard('enter-level11-deselect');
+          await waitFor(
+            () => source.getAttribute('aria-pressed') === 'false' && selectionStatus.textContent === '',
+            'keyboard deselection and cleared live-region feedback',
+          );
+          if (source.classList.contains('selected') || legal.classList.contains('legal-target') ||
+              blocked.classList.contains('blocked-target') ||
+              source.getAttribute('aria-label') !== originalSourceLabel) {
+            throw new Error('Deselection left a stale source, legal-target, or blocked-target cue');
+          }
+          const deselectedFrame = pendingFrames.shift();
+          if (!deselectedFrame) throw new Error('No animation frame was available after deselection');
+          deselectedFrame(gameWindow.performance.now());
+          const deselectedCanvas = canvasFingerprint(context, canvas);
+          if (deselectedCanvas !== baselineCanvas) {
+            throw new Error(
+              `Deselecting the source did not restore the unmarked canvas ` +
+              `(baseline ${baselineCanvas}, after deselection ${deselectedCanvas}, ` +
+              `backing ${canvas.width}x${canvas.height})`,
+            );
+          }
+
+          return {
+            level: 11,
+            selectedSource: 'keyboard Enter selects q 0, r 0; nested/double outline and explicit label',
+            legalDestination: 'q 1, r -1; dashed boundary, check mark, and legal-target label',
+            blockedNeighbor: 'q -1, r 1; hatch/cross, double boundary, and blocked label',
+            deselectionClearsAllCues: true,
+            canvasReturnsToBaseline: true,
+          };
+        }
+
         async function run() {
           await waitFor(
             () => frame.contentWindow && frame.contentDocument?.title === 'HexPour' &&
@@ -483,6 +605,11 @@
             assertVisibleInViewport(resetHintButton, 'The reset free Hint control', gameWindow);
             interactions.restartRestoresFreeHint = true;
             interactions.restartDisablesUndo = true;
+            interactions.selectionAffordances = await testKeyboardSelectionAffordances(
+              gameWindow,
+              gameDocument,
+              pendingFrames,
+            );
           }
           if (interceptedAnimationFrames === 0) {
             throw new Error('The play animation loop was not intercepted for deterministic redraw testing');

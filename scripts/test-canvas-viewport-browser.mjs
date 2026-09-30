@@ -35,6 +35,8 @@ const keyByStage = {
   'enter-destination': 'Enter',
   'enter-next-source': 'Enter',
   'enter-deselect-source': 'Enter',
+  'enter-level11-source': 'Enter',
+  'enter-level11-deselect': 'Enter',
   'enter-undo': 'Enter',
   'enter-hint': 'Enter',
 };

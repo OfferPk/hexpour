@@ -14,6 +14,8 @@ import {
 
 export interface RenderSelection {
   selected: Axial | null;
+  legalDestinationKeys: ReadonlySet<string>;
+  blockedNeighborKeys: ReadonlySet<string>;
   hint: { from: Axial; to: Axial } | null;
   shakeKey: string | null;
   shakeUntil: number;
@@ -139,6 +141,9 @@ export function drawBoard(
         ctx.stroke();
       }
       ctx.restore();
+      if (sel.blockedNeighborKeys.has(key)) {
+        drawBlockedNeighborMark(ctx, hx, cy, size);
+      }
       continue;
     }
 
@@ -150,6 +155,7 @@ export function drawBoard(
       sel.hint && sel.hint.from.q === cell.q && sel.hint.from.r === cell.r;
     const isHintTo =
       sel.hint && sel.hint.to.q === cell.q && sel.hint.to.r === cell.r;
+    const isLegalTarget = sel.legalDestinationKeys.has(key);
 
     ctx.fillStyle = isSel ? '#fff6d8' : isHintFrom || isHintTo ? '#e8f8e0' : '#f5ecd8';
     ctx.fill();
@@ -162,6 +168,14 @@ export function drawBoard(
           : '#c4b89a';
     ctx.lineWidth = isSel || isHintFrom || isHintTo ? 3 : 1.5;
     ctx.stroke();
+
+    // A nested outline keeps the selected source legible without relying on gold alone.
+    if (isSel) {
+      drawHexPath(ctx, hx, cy, size * 0.78);
+      ctx.strokeStyle = '#7b5b0a';
+      ctx.lineWidth = Math.max(1.5, size * 0.045);
+      ctx.stroke();
+    }
 
     // Stack tokens bottom → top as small rounded rects / pills
     const stack = cell.stack;
@@ -224,7 +238,66 @@ export function drawBoard(
         ctx.fill();
       }
     }
+
+    if (isLegalTarget) {
+      drawHexPath(ctx, hx, cy, size * 0.88);
+      ctx.save();
+      ctx.setLineDash([Math.max(2, size * 0.11), Math.max(2, size * 0.075)]);
+      ctx.strokeStyle = '#1e5e44';
+      ctx.lineWidth = Math.max(2, size * 0.06);
+      ctx.stroke();
+      ctx.restore();
+      drawLegalDestinationMark(ctx, hx + size * 0.57, cy - size * 0.55, size);
+    }
   }
+}
+
+function drawLegalDestinationMark(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  size: number,
+): void {
+  const radius = Math.max(4, size * 0.14);
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.fillStyle = '#fff6d8';
+  ctx.fill();
+  ctx.strokeStyle = '#1a2e1a';
+  ctx.lineWidth = Math.max(1, size * 0.04);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(cx - radius * 0.48, cy + radius * 0.02);
+  ctx.lineTo(cx - radius * 0.12, cy + radius * 0.4);
+  ctx.lineTo(cx + radius * 0.52, cy - radius * 0.42);
+  ctx.strokeStyle = '#1a2e1a';
+  ctx.lineWidth = Math.max(1.5, size * 0.065);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawBlockedNeighborMark(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  size: number,
+): void {
+  const arm = Math.max(4, size * 0.17);
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(cx - arm, cy - arm);
+  ctx.lineTo(cx + arm, cy + arm);
+  ctx.moveTo(cx + arm, cy - arm);
+  ctx.lineTo(cx - arm, cy + arm);
+  ctx.strokeStyle = '#f5ecd8';
+  ctx.lineWidth = Math.max(2, size * 0.085);
+  ctx.lineCap = 'round';
+  ctx.stroke();
+  ctx.restore();
 }
 
 function roundRect(
