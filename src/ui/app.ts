@@ -700,7 +700,10 @@ export function mountApp(root: HTMLElement): void {
     el.play.innerHTML = '';
     const top = div('topbar');
     top.append(
-      button('←', 'btn ghost', () => setScreen('levels'), 'Back to levels'),
+      button('←', 'btn ghost', () => {
+        setScreen('levels');
+        el.levels.querySelectorAll<HTMLButtonElement>('.level-btn')[levelId - 1]?.focus();
+      }, 'Back to levels'),
       Object.assign(document.createElement('div'), {
         className: 'title',
         textContent: `Level ${levelId}`,
