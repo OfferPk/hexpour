@@ -454,6 +454,7 @@ export function mountApp(root: HTMLElement): void {
   }
 
   function openSettings(): void {
+    const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     el.overlay.className = 'overlay open';
     el.overlay.innerHTML = '';
     const modal = div('modal');
@@ -470,8 +471,10 @@ export function mountApp(root: HTMLElement): void {
     const muteBtn = button(persist.mute ? 'On' : 'Off', 'btn secondary', () => {
       persist = savePersist({ mute: !persist.mute });
       muteBtn.textContent = persist.mute ? 'On' : 'Off';
+      muteBtn.setAttribute('aria-pressed', String(persist.mute));
       showToast(persist.mute ? 'Muted' : 'Sound on');
-    });
+    }, 'Mute sound');
+    muteBtn.setAttribute('aria-pressed', String(persist.mute));
     muteRow.append(muteBtn);
     modal.append(muteRow);
 
@@ -499,6 +502,7 @@ export function mountApp(root: HTMLElement): void {
       button('Close', 'btn secondary block', () => {
         el.overlay.className = 'overlay';
         el.overlay.innerHTML = '';
+        if (returnFocus?.isConnected) returnFocus.focus();
       }),
     );
     el.overlay.append(modal);
