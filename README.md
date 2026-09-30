@@ -74,6 +74,7 @@ npm test
 npm run audit:levels
 npm run test:browser:viewport
 npm run test:browser:blocked
+npm run test:browser:level-select
 ```
 
 Covers hex neighbors, legal/illegal pours, win detection, ad stubs, descriptive cell labels, validation of all 40 level definitions and opening moves, and exact shortest-solution lengths for all 40 levels. `npm run audit:levels` prints the complete 1–40 depth profile; each level has a 2,000,000-state and 60-second bound, and a bounded search is reported as incomplete rather than unsolvable.
@@ -81,6 +82,8 @@ Covers hex neighbors, legal/illegal pours, win detection, ad stubs, descriptive 
 `npm run test:browser:viewport` starts a loopback-only Vite server and runs system Chromium headlessly using Node 22+’s built-in WebSocket API, without adding browser packages. It checks canvas resize/redraw at 320×568, 360×640, 390×844, 667×375, and 844×390. In the disposable browser profile, it also uses real Tab/Enter key events on Level 2 to select a source and destination, checks that Undo is natively disabled until a pour is made and disabled again after Undo or Restart, checks the Hint button’s free-to-rewarded state and reset on Restart, verifies Undo restores the board, and confirms Hint produces accessible feedback plus a visible canvas highlight. The fixture is under `tests/`, seeds only the throwaway Chromium profile, and is not included in the production build. Set `CHROMIUM_BIN` if Chromium is not at a detected system path. This is a local command; the repository has no configured CI workflow.
 
 `npm run test:browser:blocked` uses its own empty temporary Chromium profile and loopback app origin to test Level 11’s blocked-hole-then-legal-destination path. It checks that blocked feedback preserves source selection, visual targets, focus, polite live-region status, and the saved board/settings; then it verifies a legal pour and Undo.
+
+`npm run test:browser:level-select` uses a fresh disposable Chromium profile to test keyboard traversal of unlocked choices, Escape and Back focus restoration, and exact preservation of the active saved-run snapshot, undo history, unlocks, settings, and storage. Set `HEXPOUR_TEST_URL` to run the same test against the live site in a separate fresh profile.
 
 ## License
 

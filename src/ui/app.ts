@@ -283,6 +283,17 @@ export function mountApp(root: HTMLElement): void {
     } else if (s === 'win') renderWin();
   }
 
+  function closeLevelSelect(): void {
+    setScreen('home');
+    el.home.querySelector<HTMLElement>('.home-actions .level-select-opener')?.focus();
+  }
+
+  document.addEventListener('keydown', (event: KeyboardEvent) => {
+    if (event.defaultPrevented || screen !== 'levels' || event.key !== 'Escape' || el.overlay.classList.contains('open')) return;
+    event.preventDefault();
+    closeLevelSelect();
+  });
+
   function findHomeResumeProgress(): { levelId: number; moveCount: number } | null {
     const lastUnlocked = Math.min(persist.unlocked, LEVEL_COUNT);
     for (let id = 1; id <= lastUnlocked; id++) {
@@ -380,7 +391,7 @@ export function mountApp(root: HTMLElement): void {
       );
     }
     actions.append(
-      button('Levels', 'btn secondary block', () => setScreen('levels')),
+      button('Levels', 'btn secondary block level-select-opener', () => setScreen('levels')),
       button('How to play', 'btn ghost block', () => openHowto(false)),
       button('Settings', 'btn ghost block', () => openSettings()),
     );
@@ -470,7 +481,7 @@ export function mountApp(root: HTMLElement): void {
     el.levels.innerHTML = '';
     const top = div('topbar');
     top.append(
-      button('←', 'btn ghost', () => setScreen('home'), 'Back to home'),
+      button('←', 'btn ghost', () => closeLevelSelect(), 'Back to home'),
       Object.assign(document.createElement('div'), {
         className: 'title',
         textContent: 'Select level',
