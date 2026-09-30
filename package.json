@@ -21,6 +21,7 @@
     "test:browser:home-howto-focus": "node scripts/test-home-howto-focus-browser.mjs",
     "test:browser:hint-cancel": "node scripts/test-rewarded-hint-cancel-browser.mjs",
     "test:browser:touch-pour": "node scripts/test-touch-pour-browser.mjs",
+    "test:browser:mouse-pour-focus": "node scripts/test-mouse-pour-focus-browser.mjs",
     "test:browser:remove-ads-ui": "node scripts/test-remove-ads-ui-browser.mjs",
     "test:browser:resume-level-focus": "node scripts/test-resume-level-focus-browser.mjs",
     "test": "vitest run",
