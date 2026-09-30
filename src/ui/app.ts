@@ -619,7 +619,10 @@ export function mountApp(root: HTMLElement): void {
       }
       b.disabled = locked;
       if (!locked) {
-        b.addEventListener('click', () => startLevel(i));
+        b.addEventListener('click', () => {
+          startLevel(i);
+          if (screen === 'play') focusPlayControls();
+        });
       }
       grid.append(b);
     }
