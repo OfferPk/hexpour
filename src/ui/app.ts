@@ -37,6 +37,7 @@ import {
 } from '../ads/stubs';
 import { cellAccessibleLabel } from './cellLabel';
 import { formatPourCount } from './pourCount';
+import { getRestartConfirmation } from './restartConfirmation';
 import { BOARD_CUE_LEGEND } from './boardLegend';
 import {
   createCanvasResizeHandler,
@@ -68,6 +69,7 @@ export function mountApp(root: HTMLElement): void {
   let cellButtons = new Map<string, HTMLButtonElement>();
   let undoButton: HTMLButtonElement | null = null;
   let hintButton: HTMLButtonElement | null = null;
+  let restartButton: HTMLButtonElement | null = null;
   let toastTimeout = 0;
 
   const el = {
@@ -425,6 +427,7 @@ export function mountApp(root: HTMLElement): void {
     cleanupPlay = null;
     undoButton = null;
     selectionStatus = null;
+    restartButton = null;
     if (!board) return;
     el.play.innerHTML = '';
     const top = div('topbar');
@@ -481,10 +484,11 @@ export function mountApp(root: HTMLElement): void {
     const hintControl = button('Hint', 'btn secondary', () => void doHint());
     hintButton = hintControl;
     refreshHintButton();
+    restartButton = button('Restart', 'btn ghost', () => doRestart());
     tools.append(
       undoButton,
       hintControl,
-      button('Restart', 'btn ghost', () => doRestart()),
+      restartButton,
     );
 
     const controls = document.createElement('details');
@@ -750,8 +754,48 @@ export function mountApp(root: HTMLElement): void {
     showToast('Hint highlighted');
   }
 
+  function closeRestartConfirmation(): void {
+    el.overlay.className = 'overlay';
+    el.overlay.innerHTML = '';
+    restartButton?.focus();
+  }
+
+  function showRestartConfirmation(message: string): void {
+    el.overlay.className = 'overlay open';
+    el.overlay.innerHTML = '';
+    const modal = div('modal restart-modal');
+    const title = document.createElement('h2');
+    title.id = 'restart-title';
+    title.textContent = 'Restart this level?';
+    const description = document.createElement('p');
+    description.id = 'restart-description';
+    description.textContent = message;
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', title.id);
+    modal.setAttribute('aria-describedby', description.id);
+    modal.append(
+      title,
+      description,
+      button('Keep playing', 'btn secondary block', () => closeRestartConfirmation()),
+      button('Restart level', 'btn danger block', () => {
+        el.overlay.className = 'overlay';
+        el.overlay.innerHTML = '';
+        startLevel(levelId);
+        el.play.querySelector<HTMLElement>('.accessible-board > summary')?.focus();
+      }),
+    );
+    el.overlay.append(modal);
+    focusDialog(modal);
+  }
+
   function doRestart(): void {
-    startLevel(levelId);
+    const confirmation = getRestartConfirmation(levelId, undoStack.length);
+    if (!confirmation) {
+      startLevel(levelId);
+      return;
+    }
+    showRestartConfirmation(confirmation);
   }
 
   function onWin(): void {

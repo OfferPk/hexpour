@@ -36,7 +36,7 @@ GitHub Pages path expects assets under `/hexpour/`.
 3. Target must be empty or share the same top color, and have free capacity (3–4).
 4. **Win:** every occupied cell’s stack is a single color. Empty cells are OK. Blocked (hole) cells never hold tokens.
 
-**Undo** is unlimited and becomes available after your first pour. **Hint** includes one free use per level; the play-screen button shows when its free use is spent and the next hint opens the rewarded-ad stub.
+**Undo** is unlimited and becomes available after your first pour. **Restart** asks before discarding a board once you have made a pour. **Hint** includes one free use per level; the play-screen button shows when its free use is spent and the next hint opens the rewarded-ad stub.
 
 The play screen shows the pour count. Keyboard and screen-reader users can expand **Keyboard and screen reader controls**, then use Tab and Enter/Space to select a source and destination. Token letters and spoken color names supplement color alone.
 

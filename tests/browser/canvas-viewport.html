@@ -360,6 +360,79 @@
             throw new Error('Hint feedback did not change the rendered canvas highlight');
           }
 
+          const restart = Array.from(gameDocument.querySelectorAll('.toolbar button')).find(
+            (button) => button.textContent.trim() === 'Restart',
+          );
+          if (!restart) throw new Error('Restart control is missing after Hint use');
+          source.click();
+          destination.click();
+          await waitFor(
+            () => moveStatus?.textContent === 'Pours: 1',
+            'a progressed board before testing Restart',
+          );
+          const progressedSourceLabel = source.getAttribute('aria-label');
+          const progressedDestinationLabel = destination.getAttribute('aria-label');
+          restart.click();
+          const dialog = await waitFor(
+            () => gameDocument.querySelector('.overlay.open [role="dialog"]'),
+            'the restart confirmation dialog after a pour',
+          );
+          const keepPlaying = Array.from(dialog.querySelectorAll('button')).find(
+            (button) => button.textContent.trim() === 'Keep playing',
+          );
+          if (dialog.getAttribute('aria-modal') !== 'true' ||
+              dialog.getAttribute('aria-labelledby') !== 'restart-title' ||
+              dialog.getAttribute('aria-describedby') !== 'restart-description' ||
+              dialog.querySelector('#restart-description')?.textContent !==
+                'You have made 1 pour. Restarting will discard the current board and start Level 2 over.' ||
+              gameDocument.activeElement !== keepPlaying || !keepPlaying) {
+            throw new Error('Restart confirmation is not clearly described or safely focused');
+          }
+          keepPlaying.click();
+          await waitFor(
+            () => !gameDocument.querySelector('.overlay.open [role="dialog"]'),
+            'Keep playing to close the restart confirmation',
+          );
+          if (moveStatus.textContent !== 'Pours: 1' ||
+              source.getAttribute('aria-label') !== progressedSourceLabel ||
+              destination.getAttribute('aria-label') !== progressedDestinationLabel ||
+              hint.textContent.trim() !== 'Hint: ad' || gameDocument.activeElement !== restart) {
+            throw new Error('Canceling Restart changed the board, Hint state, or focus');
+          }
+
+          restart.click();
+          const confirmDialog = await waitFor(
+            () => gameDocument.querySelector('.overlay.open [role="dialog"]'),
+            'the restart confirmation dialog on the second attempt',
+          );
+          const confirmRestart = Array.from(confirmDialog.querySelectorAll('button')).find(
+            (button) => button.textContent.trim() === 'Restart level',
+          );
+          if (!confirmRestart) throw new Error('Confirm Restart action is missing');
+          confirmRestart.click();
+          await waitFor(
+            () => gameDocument.querySelector('.move-status')?.textContent === 'Pours: 0' &&
+              Array.from(gameDocument.querySelectorAll('.toolbar button')).some(
+                (button) => button.textContent.trim() === 'Hint: free',
+              ),
+            'Restart confirmation to restore the level and free Hint',
+          );
+          const restartedCell = (q, r) => Array.from(
+            gameDocument.querySelectorAll('details.accessible-board button.cell-control'),
+          ).find((button) => button.getAttribute('aria-label')?.startsWith(`Hex cell q ${q}, r ${r}:`));
+          const resetSource = restartedCell(0, 0);
+          const resetDestination = restartedCell(0, 1);
+          const resetUndo = Array.from(gameDocument.querySelectorAll('.toolbar button')).find(
+            (button) => button.textContent.trim() === 'Undo',
+          );
+          const restartedSummary = gameDocument.querySelector('.accessible-board > summary');
+          if (gameDocument.querySelector('.overlay.open [role="dialog"]') ||
+              resetSource?.getAttribute('aria-label') !== originalSourceLabel ||
+              resetDestination?.getAttribute('aria-label') !== originalDestinationLabel ||
+              !resetUndo?.disabled || gameDocument.activeElement !== restartedSummary) {
+            throw new Error('Confirming Restart did not restore the board and keyboard focus');
+          }
+
           return {
             keyboardTabEnterSource: 'passed',
             keyboardTabEnterAdjacentDestination: 'passed',
@@ -376,6 +449,9 @@
             keyboardUndoRestoredBoard: poursAfterUndo === 'Pours: 0',
             keyboardHintStatus: toast.textContent,
             hintChangedCanvas: true,
+            restartPromptAfterPour: true,
+            cancelRestartPreservesBoardAndFocus: true,
+            confirmRestartRestoresBoard: true,
           };
         }
 
@@ -600,11 +676,35 @@
             );
           }
 
-          summary.click();
+          const currentDetails = gameDocument.querySelector('details.accessible-board');
+          const currentSummary = currentDetails?.querySelector('summary');
+          const currentWrapper = gameDocument.querySelector('.play-canvas-wrap');
+          const currentCanvas = currentWrapper?.querySelector('canvas');
+          if (!currentDetails || !currentSummary || !currentWrapper || !currentCanvas) {
+            throw new Error('The restarted level did not rebuild its controls and canvas');
+          }
+          let collapseReferenceHeight = expanded.wrapper.height;
+          if (interactions) {
+            currentSummary.click();
+            await waitFor(
+              () => currentDetails.open && currentWrapper.clientHeight < collapsedBefore.wrapper.height &&
+                currentCanvas.height === Math.floor(
+                  currentWrapper.clientHeight * Math.min(gameWindow.devicePixelRatio || 1, 2),
+                ),
+              'the restarted disclosure expansion and canvas resize',
+            );
+            await wait(80);
+            collapseReferenceHeight = captureCanvas(
+              gameWindow,
+              gameDocument,
+              'expanded-after-restart',
+            ).wrapper.height;
+          }
+          currentSummary.click();
           await waitFor(
-            () => !details.open && wrapper.clientHeight > expanded.wrapper.height &&
-              canvas.height === Math.floor(
-                wrapper.clientHeight * Math.min(gameWindow.devicePixelRatio || 1, 2),
+            () => !currentDetails.open && currentWrapper.clientHeight > collapseReferenceHeight &&
+              currentCanvas.height === Math.floor(
+                currentWrapper.clientHeight * Math.min(gameWindow.devicePixelRatio || 1, 2),
               ),
             'the collapsed-panel canvas resize',
           );
@@ -623,6 +723,9 @@
             );
             if (!restart) throw new Error('Restart control is missing after Hint use');
             restart.click();
+            if (gameDocument.querySelector('.overlay.open [role="dialog"]')) {
+              throw new Error('Restart opened a confirmation despite there being no pours to lose');
+            }
             await waitFor(
               () => gameDocument.querySelector('.topbar .title')?.textContent.trim() === 'Level 2' &&
                 gameDocument.querySelector('.move-status')?.textContent === 'Pours: 0' &&

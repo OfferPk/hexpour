@@ -78,6 +78,7 @@ h2 { font-size: 1.2rem; color: var(--cream); }
   border: 1px solid #3d5a3d;
 }
 .btn.gold { background: var(--gold); color: #1a1400; }
+.btn.danger { background: var(--danger); color: #240a0e; }
 .btn.block { width: 100%; }
 
 .home-hero {
