@@ -231,6 +231,10 @@ export function mountApp(root: HTMLElement): void {
         } else {
           // Stay on Home; refresh so A2HS can show after first-run dismiss.
           renderHome();
+          const howtoButton = Array.from(
+            el.home.querySelectorAll<HTMLButtonElement>('.home-actions button'),
+          ).find((button) => button.textContent?.trim() === 'How to play');
+          howtoButton?.focus();
         }
       }),
     );

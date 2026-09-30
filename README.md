@@ -78,6 +78,7 @@ npm run test:browser:level-select
 npm run test:browser:selection-cancel
 npm run test:browser:hint-undo
 npm run test:browser:level40-terminal
+npm run test:browser:home-howto-focus
 ```
 
 Covers hex neighbors, legal/illegal pours, win detection, ad stubs, descriptive cell labels, validation of all 40 level definitions and opening moves, and exact shortest-solution lengths for all 40 levels. `npm run audit:levels` prints the complete 1–40 depth profile; each level has a 2,000,000-state and 60-second bound, and a bounded search is reported as incomplete rather than unsolvable.
@@ -91,6 +92,8 @@ Covers hex neighbors, legal/illegal pours, win detection, ad stubs, descriptive 
 `npm run test:browser:selection-cancel` uses a fresh disposable Chromium profile to test keyboard source selection, Escape-only deselection with focus preservation and byte-for-byte saved-state preservation, reselection, and a subsequent legal Level 2 pour. Set `HEXPOUR_TEST_URL` to run it against the live site in a separate fresh profile.
 
 `npm run test:browser:first-play-focus` uses a new empty disposable Chromium profile to verify first-run How-to focus, modal Tab containment, Home tab order, keyboard dismissal and Start activation, focus visibility/transfer into board controls, and no unintended saved puzzle/settings/unlock state. It verifies the profile and browser storage are empty before any test interaction, removes the profile afterward, and checks DOM/accessibility attributes only; it does not test spoken output.
+
+`npm run test:browser:home-howto-focus` uses a new empty disposable Chromium profile, then seeds a valid saved Level 2 run with Undo history. It opens Home **How to play** by keyboard, dismisses it, and checks visible focus restoration plus exact preservation of the run, settings/unlocks, completion data, and session state. The profile and origin storage are verified empty before seeding and removed afterward; spoken screen-reader output is not tested. Set `HEXPOUR_TEST_URL` to run the same check against the live site in a separate fresh profile.
 
 `npm run test:browser:hint-undo` uses a new empty disposable Chromium profile and keyboard-only controls to verify that Level 39 Hint names both highlighted cells in the existing polite status, consumes only its free use, stays spent after a true reload and saved-run resume without changing the board, move count, Undo snapshot, settings, unlocks, or focus, and that Undo restores the exact board and saved state while returning focus to the board-controls disclosure when Undo becomes disabled. Set `HEXPOUR_TEST_URL` to repeat the same check against a live deployment and verify its current hashed JavaScript and CSS assets. It checks browser/DOM behavior only and does not test spoken output.
 
