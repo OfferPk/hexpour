@@ -39,6 +39,10 @@ const keyByStage = {
   'enter-level11-deselect': 'Enter',
   'enter-undo': 'Enter',
   'enter-hint': 'Enter',
+  'tab-saved-progress-keep': 'Tab',
+  'tab-saved-progress-discard': 'Tab',
+  'tab-saved-progress-wrap': 'Tab',
+  'escape-saved-progress': 'Escape',
 };
 
 const profileDirectory = await mkdtemp(join(tmpdir(), 'hexpour-viewport-chromium-'));
@@ -165,7 +169,7 @@ try {
   });
 
   async function pressKey(key) {
-    const virtualKey = key === 'Tab' ? 9 : 13;
+    const virtualKey = ({ Tab: 9, Enter: 13, Escape: 27 })[key];
     const keyParams = {
       key,
       code: key,

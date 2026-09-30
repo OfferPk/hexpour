@@ -985,31 +985,64 @@
             gameDocument.querySelectorAll('#home.screen.active button'),
           ).find((button) => button.textContent.trim() === 'Play');
           if (!defaultPlay || !homeResumeButton()) throw new Error('Home did not offer both Play and Resume after reload');
+          defaultPlay.focus();
           defaultPlay.click();
-          const savedProgressDialog = await waitFor(
+          const keyboardSaveDialog = await waitFor(
             () => gameDocument.querySelector('.overlay.open [role="dialog"]'),
             'Play to explain that starting the unlocked level will replace the saved lower-level puzzle',
           );
-          const savedProgressDescription = savedProgressDialog.querySelector('#saved-progress-description');
-          const resumeFromDialog = Array.from(savedProgressDialog.querySelectorAll('button')).find(
+          const savedProgressDescription = keyboardSaveDialog.querySelector('#saved-progress-description');
+          const keyboardResume = Array.from(keyboardSaveDialog.querySelectorAll('button')).find(
             (button) => button.textContent.trim() === 'Resume Level 2 · 1 pour',
           );
-          const keepSavedProgress = Array.from(savedProgressDialog.querySelectorAll('button')).find(
+          const keepSavedProgress = Array.from(keyboardSaveDialog.querySelectorAll('button')).find(
             (button) => button.textContent.trim() === 'Keep saved progress',
           );
-          const discardSavedProgress = Array.from(savedProgressDialog.querySelectorAll('button')).find(
+          const discardSavedProgress = Array.from(keyboardSaveDialog.querySelectorAll('button')).find(
             (button) => button.textContent.trim() === 'Start Level 3 and discard save',
           );
-          if (savedProgressDialog.getAttribute('aria-modal') !== 'true' ||
-              savedProgressDialog.getAttribute('aria-labelledby') !== 'saved-progress-title' ||
-              savedProgressDialog.getAttribute('aria-describedby') !== 'saved-progress-description' ||
+          if (keyboardSaveDialog.getAttribute('aria-modal') !== 'true' ||
+              keyboardSaveDialog.getAttribute('aria-labelledby') !== 'saved-progress-title' ||
+              keyboardSaveDialog.getAttribute('aria-describedby') !== 'saved-progress-description' ||
               savedProgressDescription?.textContent !==
                 'You have made 1 pour in Level 2. Starting Level 3 will discard that saved board.' ||
-              !resumeFromDialog || !keepSavedProgress || !discardSavedProgress ||
-              gameDocument.activeElement !== resumeFromDialog ||
+              !keyboardResume || !keepSavedProgress || !discardSavedProgress ||
+              gameDocument.activeElement !== keyboardResume ||
               gameWindow.localStorage.getItem('hexpour:in-progress') !== saveBeforeHomeResume) {
             throw new Error('Play did not provide an accessible, non-destructive choice before replacing saved progress');
           }
+          await pauseForKeyboard('tab-saved-progress-keep');
+          if (gameDocument.activeElement !== keepSavedProgress) {
+            throw new Error('Tab did not move from Resume to Keep saved progress');
+          }
+          await pauseForKeyboard('tab-saved-progress-discard');
+          if (gameDocument.activeElement !== discardSavedProgress) {
+            throw new Error('Tab did not move from Keep saved progress to explicit discard');
+          }
+          await pauseForKeyboard('tab-saved-progress-wrap');
+          if (gameDocument.activeElement !== keyboardResume) {
+            throw new Error('Tab did not wrap from explicit discard to Resume inside the dialog');
+          }
+          await pauseForKeyboard('escape-saved-progress');
+          await waitFor(
+            () => !gameDocument.querySelector('.overlay.open [role="dialog"]') &&
+              gameDocument.querySelector('#home.screen.active'),
+            'Escape to cancel safely and close the Play confirmation',
+          );
+          if (gameDocument.activeElement !== defaultPlay ||
+              gameWindow.localStorage.getItem('hexpour:in-progress') !== saveBeforeHomeResume ||
+              !homeResumeButton()) {
+            throw new Error('Escape did not preserve the saved board and return focus to Play');
+          }
+          defaultPlay.click();
+          const savedProgressDialog = await waitFor(
+            () => gameDocument.querySelector('.overlay.open [role="dialog"]'),
+            'Play confirmation after safely canceling with Escape',
+          );
+          const resumeFromDialog = Array.from(savedProgressDialog.querySelectorAll('button')).find(
+            (button) => button.textContent.trim() === 'Resume Level 2 · 1 pour',
+          );
+          if (!resumeFromDialog) throw new Error('The Resume choice disappeared after Escape cancellation');
           resumeFromDialog.click();
           await waitForLevelTwo(1);
           if (gameWindow.localStorage.getItem('hexpour:in-progress') !== saveBeforeHomeResume) {

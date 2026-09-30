@@ -319,6 +319,13 @@ export function mountApp(root: HTMLElement): void {
       el.overlay.className = 'overlay';
       el.overlay.innerHTML = '';
     };
+    const keepSavedProgress = () => {
+      close();
+      const fallback = Array.from(el.home.querySelectorAll('button')).find(
+        (item) => item.textContent?.trim() === 'Play',
+      );
+      (returnFocus?.isConnected ? returnFocus : fallback)?.focus();
+    };
     const resumeLabel = `Resume Level ${saved.levelId} · ${formatPourCount(saved.moveCount)}`;
     modal.append(
       title,
@@ -328,19 +335,18 @@ export function mountApp(root: HTMLElement): void {
         startLevel(saved.levelId);
         focusPlayControls();
       }, resumeLabel),
-      button('Keep saved progress', 'btn secondary block', () => {
-        close();
-        const fallback = Array.from(el.home.querySelectorAll('button')).find(
-          (item) => item.textContent?.trim() === 'Play',
-        );
-        (returnFocus?.isConnected ? returnFocus : fallback)?.focus();
-      }),
+      button('Keep saved progress', 'btn secondary block', keepSavedProgress),
       button(`Start Level ${targetLevel} and discard save`, 'btn danger block', () => {
         close();
         startLevel(targetLevel, true);
         focusPlayControls();
       }),
     );
+    modal.addEventListener('keydown', (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      keepSavedProgress();
+    });
     el.overlay.append(modal);
     focusDialog(modal);
   }
