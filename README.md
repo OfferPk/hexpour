@@ -38,6 +38,8 @@ GitHub Pages path expects assets under `/hexpour/`.
 
 **Undo** is unlimited. **Hint** — 1 free per level, then a rewarded-ad stub.
 
+The play screen shows the pour count. Keyboard and screen-reader users can expand **Keyboard and screen reader controls**, then use Tab and Enter/Space to select a source and destination. Token letters and spoken color names supplement color alone.
+
 ## Differentiation
 
 | HexPour | TubeSort-class |
@@ -52,11 +54,12 @@ Orientation: **flat-top** axial coordinates (documented in `src/game/hex.ts`).
 
 - 40 JSON levels (easy → hard), colors `R|G|B|Y|P|O`
 - Unlimited undo + hint
-- Ads stubs: `showInterstitial`, `showRewarded`, `purchaseRemoveAds`, `isAdsRemoved`
+- Demo ad hooks; the rewarded-hint prompt remains a stub, while wins and restarts are uninterrupted
 - Screens: Home, level select, play, win; mute / settings
 - Progress in `localStorage` (unlock + adsRemoved + mute)
 - PWA offline after first load
 - First-run howto + Home How to play; win Share; Home A2HS tip
+- Keyboard/screen-reader cell controls, descriptive token labels, and reduced-motion support
 
 ## Docs
 
@@ -68,9 +71,10 @@ Orientation: **flat-top** axial coordinates (documented in `src/game/hex.ts`).
 
 ```bash
 npm test
+npm run audit:levels
 ```
 
-Covers hex neighbors, legal/illegal pour, win detect, level-1 fixture, ads stubs.
+Covers hex neighbors, legal/illegal pours, win detection, ad stubs, descriptive cell labels, validation of all 40 level definitions and opening moves, and exact shortest-solution lengths for all 40 levels. `npm run audit:levels` prints the complete 1–40 depth profile; each level has a 2,000,000-state and 60-second bound, and a bounded search is reported as incomplete rather than unsolvable.
 
 ## License
 

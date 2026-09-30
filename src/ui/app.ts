@@ -1,5 +1,5 @@
 /**
- * HexPour UI — Home, level select, play, win; mute/settings; ads wired.
+ * HexPour UI — Home, level select, play, win; mute/settings; rewarded-hint demo.
  * Post-v0.1.0 polish: first-run howto, win Share, Home A2HS tip.
  */
 import {
@@ -30,11 +30,11 @@ import {
 import {
   isAdsRemoved,
   purchaseRemoveAds,
-  setInterstitialPresenter,
   setRewardedPresenter,
-  showInterstitial,
   showRewarded,
 } from '../ads/stubs';
+import { cellAccessibleLabel } from './cellLabel';
+import { formatPourCount } from './pourCount';
 
 type Screen = 'home' | 'levels' | 'play' | 'win';
 
@@ -51,6 +51,10 @@ export function mountApp(root: HTMLElement): void {
   let shakeKey: string | null = null;
   let shakeUntil = 0;
   let raf = 0;
+  let cleanupPlay: (() => void) | null = null;
+  let moveStatus: HTMLDivElement | null = null;
+  let cellButtons = new Map<string, HTMLButtonElement>();
+  let toastTimeout = 0;
 
   const el = {
     home: div('screen', 'home'),
@@ -62,15 +66,11 @@ export function mountApp(root: HTMLElement): void {
   };
 
   root.append(el.home, el.levels, el.play, el.win, el.overlay, el.toast);
+  el.toast.setAttribute('role', 'status');
+  el.toast.setAttribute('aria-live', 'polite');
+  el.toast.setAttribute('aria-atomic', 'true');
 
-  // —— Ad presenters (visible stubs) ——
-  setInterstitialPresenter(async (reason) => {
-    await showModalStub(
-      'Ad stub — Interstitial',
-      `Reason: ${reason}\n(No real ad SDK in MVP)`,
-      'Continue',
-    );
-  });
+  // Rewarded hints remain explicit demo stubs; interstitials never block play.
   setRewardedPresenter(async (reason) => {
     const ok = await showModalStubConfirm(
       'Ad stub — Rewarded',
@@ -84,27 +84,8 @@ export function mountApp(root: HTMLElement): void {
   function showToast(msg: string): void {
     el.toast.textContent = msg;
     el.toast.classList.add('show');
-    setTimeout(() => el.toast.classList.remove('show'), 1600);
-  }
-
-  function showModalStub(
-    title: string,
-    body: string,
-    okLabel: string,
-  ): Promise<void> {
-    return new Promise((resolve) => {
-      el.overlay.className = 'overlay open';
-      el.overlay.innerHTML = '';
-      const modal = div('modal');
-      modal.innerHTML = `<div class="ad-stub"><strong>${esc(title)}</strong>${esc(body).replace(/\n/g, '<br/>')}</div>`;
-      const btn = button(okLabel, 'btn block', () => {
-        el.overlay.className = 'overlay';
-        el.overlay.innerHTML = '';
-        resolve();
-      });
-      modal.append(btn);
-      el.overlay.append(modal);
-    });
+    window.clearTimeout(toastTimeout);
+    toastTimeout = window.setTimeout(() => el.toast.classList.remove('show'), 1600);
   }
 
   function showModalStubConfirm(
@@ -117,6 +98,9 @@ export function mountApp(root: HTMLElement): void {
       el.overlay.className = 'overlay open';
       el.overlay.innerHTML = '';
       const modal = div('modal');
+      modal.setAttribute('role', 'dialog');
+      modal.setAttribute('aria-modal', 'true');
+      modal.setAttribute('aria-label', title);
       modal.innerHTML = `<div class="ad-stub"><strong>${esc(title)}</strong>${esc(body).replace(/\n/g, '<br/>')}</div>`;
       const row = div('');
       row.style.display = 'flex';
@@ -135,6 +119,7 @@ export function mountApp(root: HTMLElement): void {
       );
       modal.append(row);
       el.overlay.append(modal);
+      focusDialog(modal);
     });
   }
 
@@ -145,6 +130,10 @@ export function mountApp(root: HTMLElement): void {
     const modal = div('modal howto-modal');
     const h = document.createElement('h2');
     h.textContent = 'How to play';
+    h.id = 'howto-title';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', h.id);
     modal.append(h);
 
     const list = document.createElement('ul');
@@ -183,6 +172,7 @@ export function mountApp(root: HTMLElement): void {
       }),
     );
     el.overlay.append(modal);
+    focusDialog(modal);
   }
 
   // —— Share helpers ——
@@ -255,6 +245,10 @@ export function mountApp(root: HTMLElement): void {
   }
 
   function setScreen(s: Screen): void {
+    if (screen === 'play' && s !== 'play') {
+      cleanupPlay?.();
+      cleanupPlay = null;
+    }
     screen = s;
     for (const k of ['home', 'levels', 'play', 'win'] as const) {
       el[k].classList.toggle('active', k === s);
@@ -316,6 +310,10 @@ export function mountApp(root: HTMLElement): void {
     const modal = div('modal');
     const h = document.createElement('h2');
     h.textContent = 'Settings';
+    h.id = 'settings-title';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', h.id);
     modal.append(h);
 
     const muteRow = div('settings-row');
@@ -355,6 +353,7 @@ export function mountApp(root: HTMLElement): void {
       }),
     );
     el.overlay.append(modal);
+    focusDialog(modal);
   }
 
   // —— LEVELS ——
@@ -363,7 +362,7 @@ export function mountApp(root: HTMLElement): void {
     el.levels.innerHTML = '';
     const top = div('topbar');
     top.append(
-      button('←', 'btn ghost', () => setScreen('home')),
+      button('←', 'btn ghost', () => setScreen('home'), 'Back to home'),
       Object.assign(document.createElement('div'), {
         className: 'title',
         textContent: 'Select level',
@@ -371,7 +370,7 @@ export function mountApp(root: HTMLElement): void {
       button(persist.mute ? '🔇' : '🔊', 'btn ghost', () => {
         persist = savePersist({ mute: !persist.mute });
         renderLevels();
-      }),
+      }, persist.mute ? 'Unmute' : 'Mute'),
     );
     const grid = div('level-grid');
     for (let i = 1; i <= LEVEL_COUNT; i++) {
@@ -380,6 +379,7 @@ export function mountApp(root: HTMLElement): void {
       const b = document.createElement('button');
       b.className = 'level-btn' + (locked ? ' locked' : '') + (done ? ' done' : '');
       b.textContent = locked ? '🔒' : String(i);
+      b.setAttribute('aria-label', locked ? `Level ${i}, locked` : done ? `Level ${i}, complete` : `Level ${i}`);
       b.disabled = locked;
       if (!locked) {
         b.addEventListener('click', () => startLevel(i));
@@ -407,18 +407,28 @@ export function mountApp(root: HTMLElement): void {
   }
 
   function renderPlayShell(): void {
+    cleanupPlay?.();
+    cleanupPlay = null;
+    if (!board) return;
     el.play.innerHTML = '';
     const top = div('topbar');
     top.append(
-      button('←', 'btn ghost', () => setScreen('levels')),
+      button('←', 'btn ghost', () => setScreen('levels'), 'Back to levels'),
       Object.assign(document.createElement('div'), {
         className: 'title',
         textContent: `Level ${levelId}`,
       }),
-      button('⚙', 'btn ghost', () => openSettings()),
+      button('⚙', 'btn ghost', () => openSettings(), 'Open settings'),
     );
+
+    moveStatus = div('move-status');
+    moveStatus.setAttribute('aria-live', 'polite');
+    moveStatus.setAttribute('aria-atomic', 'true');
+    updateMoveStatus();
+
     const wrap = div('play-canvas-wrap');
     canvas = document.createElement('canvas');
+    canvas.setAttribute('aria-hidden', 'true');
     wrap.append(canvas);
     ctx = canvas.getContext('2d')!;
 
@@ -426,9 +436,32 @@ export function mountApp(root: HTMLElement): void {
     tools.append(
       button('Undo', 'btn secondary', () => doUndo()),
       button('Hint', 'btn secondary', () => void doHint()),
-      button('Restart', 'btn ghost', () => void doRestart()),
+      button('Restart', 'btn ghost', () => doRestart()),
     );
-    el.play.append(top, wrap, tools);
+
+    const controls = document.createElement('details');
+    controls.className = 'accessible-board';
+    const summary = document.createElement('summary');
+    summary.textContent = 'Keyboard and screen reader controls';
+    const instructions = document.createElement('p');
+    instructions.textContent =
+      'Use Tab to choose a cell and Enter or Space to activate it. ' +
+      'Select a cell with tokens, then select an adjacent destination.';
+    const grid = div('cell-control-grid');
+    grid.setAttribute('role', 'group');
+    grid.setAttribute('aria-label', 'Hex cells');
+    cellButtons = new Map();
+    for (const cell of board.cells.values()) {
+      const key = `${cell.q},${cell.r}`;
+      const control = button('', 'cell-control', () =>
+        activateCell({ q: cell.q, r: cell.r }),
+      );
+      cellButtons.set(key, control);
+      grid.append(control);
+    }
+    controls.append(summary, instructions, grid);
+    el.play.append(top, moveStatus, wrap, tools, controls);
+    refreshCellControls();
 
     const resize = () => {
       const rect = wrap.getBoundingClientRect();
@@ -451,47 +484,79 @@ export function mountApp(root: HTMLElement): void {
       const hit = hitTest(board, layout, x, y);
       if (!hit) {
         selected = null;
+        refreshCellControls();
         return;
       }
-      const cell = board.cells.get(`${hit.q},${hit.r}`);
-      if (!cell || cell.blocked) {
-        selected = null;
-        return;
-      }
-      if (!selected) {
-        if (cell.stack.length === 0) {
-          pulseShake(hit);
-          showToast('Pick a cell with colors');
-          return;
-        }
-        selected = hit;
-        hint = null;
-        return;
-      }
-      if (selected.q === hit.q && selected.r === hit.r) {
-        selected = null;
-        return;
-      }
-      // attempt pour
-      undoStack.push(cloneBoard(board));
-      const result = tryPour(board, selected, hit);
-      if (!result.ok) {
-        undoStack.pop();
-        pulseShake(hit);
-        showToast(pourMsg(result.reason));
-        selected = null;
-        return;
-      }
-      selected = null;
-      hint = null;
-      if (isWon(board)) {
-        void onWin();
-      }
+      activateCell(hit);
     };
     canvas.addEventListener('pointerup', onPointer);
+    cleanupPlay = () => {
+      window.removeEventListener('resize', resize);
+      canvas.removeEventListener('pointerup', onPointer);
+    };
+  }
+
+  function activateCell(hit: Axial): void {
+    if (!board) return;
+    const cell = board.cells.get(`${hit.q},${hit.r}`);
+    if (!cell || cell.blocked) {
+      selected = null;
+      refreshCellControls();
+      return;
+    }
+    if (!selected) {
+      if (cell.stack.length === 0) {
+        pulseShake(hit);
+        showToast('Pick a cell with colors');
+        return;
+      }
+      selected = hit;
+      hint = null;
+      refreshCellControls();
+      return;
+    }
+    if (selected.q === hit.q && selected.r === hit.r) {
+      selected = null;
+      refreshCellControls();
+      return;
+    }
+
+    undoStack.push(cloneBoard(board));
+    const result = tryPour(board, selected, hit);
+    if (!result.ok) {
+      undoStack.pop();
+      pulseShake(hit);
+      showToast(pourMsg(result.reason));
+      selected = null;
+      refreshCellControls();
+      return;
+    }
+    selected = null;
+    hint = null;
+    updateMoveStatus();
+    refreshCellControls();
+    if (isWon(board)) onWin();
+  }
+
+  function refreshCellControls(): void {
+    if (!board) return;
+    for (const [key, control] of cellButtons) {
+      const cell = board.cells.get(key);
+      if (!cell) continue;
+      const active = selected?.q === cell.q && selected.r === cell.r;
+      control.setAttribute('aria-label', cellAccessibleLabel(cell));
+      control.setAttribute('aria-pressed', String(active));
+      control.classList.toggle('selected', active);
+      control.disabled = cell.blocked;
+    }
+  }
+
+  function updateMoveStatus(): void {
+    if (moveStatus) moveStatus.textContent = `Pours: ${undoStack.length}`;
   }
 
   function pulseShake(a: Axial): void {
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
     shakeKey = `${a.q},${a.r}`;
     shakeUntil = performance.now() + 400;
   }
@@ -521,6 +586,8 @@ export function mountApp(root: HTMLElement): void {
     board = undoStack.pop()!;
     selected = null;
     hint = null;
+    updateMoveStatus();
+    refreshCellControls();
   }
 
   async function doHint(): Promise<void> {
@@ -544,15 +611,15 @@ export function mountApp(root: HTMLElement): void {
     }
     hint = h;
     selected = null;
+    refreshCellControls();
     showToast('Hint highlighted');
   }
 
-  async function doRestart(): Promise<void> {
-    await showInterstitial('restart');
+  function doRestart(): void {
     startLevel(levelId);
   }
 
-  async function onWin(): Promise<void> {
+  function onWin(): void {
     const next = levelId + 1;
     if (next <= LEVEL_COUNT) {
       persist = unlockLevel(next);
@@ -560,7 +627,6 @@ export function mountApp(root: HTMLElement): void {
       // all done — keep unlocked at 40
       persist = unlockLevel(LEVEL_COUNT);
     }
-    await showInterstitial('win');
     setScreen('win');
   }
 
@@ -587,9 +653,10 @@ export function mountApp(root: HTMLElement): void {
     el.win.innerHTML = '';
     const hero = div('home-hero');
     const next = levelId + 1;
+    const pourCount = formatPourCount(undoStack.length);
     hero.innerHTML = `
       <h1>Hive clear!</h1>
-      <p class="tagline">Level ${levelId} complete — every stack is pure.</p>
+      <p class="tagline">Level ${levelId} complete in ${pourCount} — every stack is pure.</p>
     `;
     const actions = div('home-actions');
     if (next <= LEVEL_COUNT) {
@@ -623,11 +690,17 @@ function div(className: string, id?: string): HTMLDivElement {
   return d;
 }
 
-function button(label: string, className: string, onClick: () => void): HTMLButtonElement {
+function button(
+  label: string,
+  className: string,
+  onClick: () => void,
+  accessibleName?: string,
+): HTMLButtonElement {
   const b = document.createElement('button');
   b.className = className;
   b.textContent = label;
   b.type = 'button';
+  if (accessibleName) b.setAttribute('aria-label', accessibleName);
   b.addEventListener('click', onClick);
   return b;
 }
@@ -638,4 +711,26 @@ function esc(s: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+function focusDialog(modal: HTMLElement): void {
+  const controls = Array.from(
+    modal.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ),
+  );
+  const first = controls[0];
+  const last = controls[controls.length - 1];
+  if (!first || !last) return;
+  modal.addEventListener('keydown', (event: KeyboardEvent) => {
+    if (event.key !== 'Tab') return;
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  });
+  first.focus();
 }

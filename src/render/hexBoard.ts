@@ -203,6 +203,14 @@ export function drawBoard(
       );
       ctx.fillStyle = 'rgba(255,255,255,0.25)';
       ctx.fill();
+
+      if (tokenH >= 8) {
+        ctx.fillStyle = color === 'R' || color === 'P' ? '#fff' : '#1a2e1a';
+        ctx.font = `700 ${Math.min(10, tokenH * 0.9)}px system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(color, hx, yy + tokenH * 0.08);
+      }
     }
 
     // Uniform badge

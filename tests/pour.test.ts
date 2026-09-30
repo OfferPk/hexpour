@@ -135,21 +135,18 @@ describe('win detect', () => {
 });
 
 describe('fixture level 1', () => {
-  it('loads and has legal pours', async () => {
+  it('has a one-pour solution that actually wins', async () => {
     const { default: level1 } = await import('../src/levels/level-01.json');
     const board = loadBoard(level1 as LevelDef);
     expect(board.capacity).toBe(3);
     const legal = listLegalPours(board);
     expect(legal.length).toBeGreaterThan(0);
-    // solve-ish: pour until win or cap steps
-    let steps = 0;
-    while (!isWon(board) && steps < 50) {
-      const moves = listLegalPours(board);
-      if (moves.length === 0) break;
-      tryPour(board, moves[0]!.from, moves[0]!.to);
-      steps++;
-    }
-    // Level 1 is designed to be solvable; assert we made progress or won
-    expect(steps).toBeGreaterThan(0);
+    const winning = legal.filter(({ from, to }) => {
+      const candidate = cloneBoard(board);
+      return tryPour(candidate, from, to).ok && isWon(candidate);
+    });
+    expect(winning).toHaveLength(1);
+    expect(tryPour(board, winning[0]!.from, winning[0]!.to).ok).toBe(true);
+    expect(isWon(board)).toBe(true);
   });
 });
