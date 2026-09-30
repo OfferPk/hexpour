@@ -968,8 +968,14 @@
               gameWindow.localStorage.getItem('hexpour:in-progress') !== saveBeforeHomeResume) {
             throw new Error('Home lost the Resume action or saved board after a true reload');
           }
-          resumeAfterReload.click();
+          resumeAfterReload.focus();
+          await waitFor(() => gameDocument.activeElement === resumeAfterReload, 'keyboard focus on direct Home Resume');
+          await pauseForKeyboard('enter-home-resume');
           await waitForLevelTwo(1);
+          const resumedBoardControls = gameDocument.querySelector('#play.screen.active .accessible-board > summary');
+          if (!resumedBoardControls || gameDocument.activeElement !== resumedBoardControls) {
+            throw new Error('Keyboard-activated Home Resume did not move focus into the active puzzle controls');
+          }
           const resumedStatus = gameDocument.querySelector('.toast[role="status"]');
           if (gameWindow.localStorage.getItem('hexpour:in-progress') !== saveBeforeHomeResume ||
               resumedStatus?.textContent !== 'Resumed Level 2 · 1 pour' ||

@@ -39,6 +39,7 @@ const keyByStage = {
   'enter-level11-deselect': 'Enter',
   'enter-undo': 'Enter',
   'enter-hint': 'Enter',
+  'enter-home-resume': 'Enter',
   'tab-saved-progress-keep': 'Tab',
   'tab-saved-progress-discard': 'Tab',
   'tab-saved-progress-wrap': 'Tab',

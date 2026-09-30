@@ -373,7 +373,10 @@ export function mountApp(root: HTMLElement): void {
     if (savedProgress) {
       const label = `Resume Level ${savedProgress.levelId} · ${formatPourCount(savedProgress.moveCount)}`;
       actions.append(
-        button(label, 'btn secondary block home-resume', () => startLevel(savedProgress.levelId), label),
+        button(label, 'btn secondary block home-resume', () => {
+          startLevel(savedProgress.levelId);
+          if (screen === 'play') focusPlayControls();
+        }, label),
       );
     }
     actions.append(
