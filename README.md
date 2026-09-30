@@ -88,6 +88,8 @@ Covers hex neighbors, legal/illegal pours, win detection, ad stubs, descriptive 
 
 `npm run test:browser:selection-cancel` uses a fresh disposable Chromium profile to test keyboard source selection, Escape-only deselection with focus preservation and byte-for-byte saved-state preservation, reselection, and a subsequent legal Level 2 pour. Set `HEXPOUR_TEST_URL` to run it against the live site in a separate fresh profile.
 
+`npm run test:browser:first-play-focus` uses a new empty disposable Chromium profile to verify first-run How-to focus, modal Tab containment, Home tab order, keyboard dismissal and Start activation, focus visibility/transfer into board controls, and no unintended saved puzzle/settings/unlock state. It verifies the profile and browser storage are empty before any test interaction, removes the profile afterward, and checks DOM/accessibility attributes only; it does not test spoken output.
+
 ## License
 
 Proprietary factory build — original art/theme; no Hexa Sort / Hex Match IP.

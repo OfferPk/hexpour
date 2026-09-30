@@ -216,6 +216,7 @@ export function mountApp(root: HTMLElement): void {
         el.overlay.innerHTML = '';
         if (fromFirstRun || screen !== 'home') {
           setScreen('home');
+          if (fromFirstRun) focusHomeControls();
         } else {
           // Stay on Home; refresh so A2HS can show after first-run dismiss.
           renderHome();
@@ -418,7 +419,10 @@ export function mountApp(root: HTMLElement): void {
     const savedProgress = findHomeResumeProgress();
     const defaultLevel = Math.min(persist.unlocked, LEVEL_COUNT);
     actions.append(
-      button('Play', 'btn block', () => startLevel(defaultLevel)),
+      button('Play', 'btn block', () => {
+        startLevel(defaultLevel);
+        if (screen === 'play') focusPlayControls();
+      }),
     );
     if (savedProgress) {
       const label = `Resume Level ${savedProgress.levelId} · ${formatPourCount(savedProgress.moveCount)}`;

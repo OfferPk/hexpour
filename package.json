@@ -13,6 +13,7 @@
     "test:browser:level-select": "node scripts/test-level-select-keyboard-browser.mjs",
     "test:browser:selection-cancel": "node scripts/test-selection-cancel-browser.mjs",
     "test:browser:settings-accessibility": "node scripts/test-settings-accessibility-browser.mjs",
+    "test:browser:first-play-focus": "node scripts/test-first-play-focus-browser.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },
