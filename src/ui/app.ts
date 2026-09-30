@@ -522,6 +522,7 @@ export function mountApp(root: HTMLElement): void {
 
     const adsRow = div('settings-row');
     adsRow.innerHTML = `<span>Remove ads</span>`;
+    let closeSettingsButton: HTMLButtonElement | null = null;
     const adsBtn = button(
       isAdsRemoved() ? 'Owned' : 'Buy (stub)',
       'btn gold',
@@ -532,7 +533,10 @@ export function mountApp(root: HTMLElement): void {
         }
         await purchaseRemoveAds();
         persist = loadPersist();
+        const moveFocusToClose = document.activeElement === adsBtn;
         adsBtn.textContent = 'Owned';
+        adsBtn.disabled = true;
+        if (moveFocusToClose) closeSettingsButton?.focus();
         showToast('Ads removed (stub)');
       },
     );
@@ -545,9 +549,8 @@ export function mountApp(root: HTMLElement): void {
       el.overlay.innerHTML = '';
       if (returnFocus?.isConnected) returnFocus.focus();
     };
-    modal.append(
-      button('Close', 'btn secondary block', closeSettings),
-    );
+    closeSettingsButton = button('Close', 'btn secondary block', closeSettings);
+    modal.append(closeSettingsButton);
     modal.addEventListener('keydown', (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       event.preventDefault();
