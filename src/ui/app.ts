@@ -527,6 +527,15 @@ export function mountApp(root: HTMLElement): void {
   function startLevel(id: number, discardConfirmed = false): void {
     const def = getLevel(id);
     if (!def) return;
+    if (!discardConfirmed) {
+      const savedProgress = findHomeResumeProgress();
+      if (savedProgress && savedProgress.levelId !== id) {
+        const active = document.activeElement;
+        const returnFocus = active instanceof HTMLElement ? active : null;
+        showSavedProgressConfirmation(savedProgress, id, returnFocus);
+        return;
+      }
+    }
     if (!discardConfirmed && board && undoStack.length > 0 && !isWon(board)) {
       if (id === levelId) {
         setScreen('play');
@@ -536,15 +545,6 @@ export function mountApp(root: HTMLElement): void {
       const confirmation = getLevelChangeConfirmation(levelId, id, undoStack.length);
       if (confirmation) {
         showLevelChangeConfirmation(id, confirmation);
-        return;
-      }
-    }
-    if (!discardConfirmed) {
-      const savedProgress = findHomeResumeProgress();
-      if (savedProgress && savedProgress.levelId !== id) {
-        const active = document.activeElement;
-        const returnFocus = active instanceof HTMLElement ? active : null;
-        showSavedProgressConfirmation(savedProgress, id, returnFocus);
         return;
       }
     }

@@ -71,6 +71,7 @@
         }
 
         async function waitFor(predicate, label, timeoutMs = 7000) {
+          result.dataset.progress = label;
           const deadline = Date.now() + timeoutMs;
           while (Date.now() < deadline) {
             const value = predicate();
@@ -193,6 +194,7 @@
         }
 
         async function pauseForKeyboard(stage) {
+          result.dataset.progress = `keyboard:${stage}`;
           result.dataset.status = `awaiting:${stage}`;
           await waitFor(
             () => result.dataset.resume === stage,
@@ -718,30 +720,42 @@
 
           backToLevels()?.click();
           await waitFor(() => levelButton(1), 'Level 1 as an alternate unlocked choice');
+          const saveBeforePickerCancel = gameWindow.localStorage.getItem('hexpour:in-progress');
+          if (!saveBeforePickerCancel) throw new Error('The active Level 2 board has no saved snapshot to protect');
+          levelButton(1).focus();
           levelButton(1).click();
           const dialog = await waitFor(
             () => gameDocument.querySelector('.overlay.open [role="dialog"]'),
-            'a level-change confirmation before replacing progress',
+            'the saved-run choices before replacing progress from Level Select',
           );
-          const keepPlaying = Array.from(dialog.querySelectorAll('button')).find(
-            (button) => button.textContent.trim() === 'Keep playing',
+          const keepActivePickerSaveButton = Array.from(dialog.querySelectorAll('button')).find(
+            (button) => button.textContent.trim() === 'Keep saved progress',
           );
-          const description = dialog.querySelector('#level-change-description');
+          const resumeSavedRun = Array.from(dialog.querySelectorAll('button')).find(
+            (button) => button.textContent.trim() === 'Resume Level 2 · 1 pour',
+          );
+          const discardSavedRun = Array.from(dialog.querySelectorAll('button')).find(
+            (button) => button.textContent.trim() === 'Start Level 1 and discard save',
+          );
+          const description = dialog.querySelector('#saved-progress-description');
           if (dialog.getAttribute('aria-modal') !== 'true' ||
-              dialog.getAttribute('aria-labelledby') !== 'level-change-title' ||
-              dialog.getAttribute('aria-describedby') !== 'level-change-description' ||
+              dialog.getAttribute('aria-labelledby') !== 'saved-progress-title' ||
+              dialog.getAttribute('aria-describedby') !== 'saved-progress-description' ||
               description?.textContent !==
-                'You have made 1 pour in Level 2. Switching to Level 1 will discard this board.' ||
-              gameDocument.activeElement !== keepPlaying || !keepPlaying) {
-            throw new Error('Level-change confirmation is not accessible, specific, or initially focused');
+                'You have made 1 pour in Level 2. Starting Level 1 will discard that saved board.' ||
+              gameDocument.activeElement !== resumeSavedRun || !keepActivePickerSaveButton || !resumeSavedRun || !discardSavedRun ||
+              gameWindow.localStorage.getItem('hexpour:in-progress') !== saveBeforePickerCancel) {
+            throw new Error('The active Level Select safeguard is not accessible or does not preserve all three choices');
           }
-          keepPlaying.click();
-          await waitForLevelTwo(1);
-          if (gameDocument.querySelector('.overlay.open [role="dialog"]') ||
-              [activeCell(0, 0)?.getAttribute('aria-label'), activeCell(0, 1)?.getAttribute('aria-label')]
-                .some((label, index) => label !== progressedLabels[index]) ||
-              gameDocument.activeElement !== gameDocument.querySelector('#play.screen.active .accessible-board > summary')) {
-            throw new Error('Canceling a level change did not preserve and restore the active board');
+          keepActivePickerSaveButton.click();
+          await waitFor(
+            () => gameDocument.querySelector('#levels.screen.active') &&
+              !gameDocument.querySelector('.overlay.open [role="dialog"]'),
+            'Keep saved progress to cancel the level change',
+          );
+          if (gameDocument.activeElement !== levelButton(1) ||
+              gameWindow.localStorage.getItem('hexpour:in-progress') !== saveBeforePickerCancel) {
+            throw new Error('Canceling the Level Select choice did not preserve the snapshot and focus the selected level');
           }
           backToLevels()?.click();
           await waitFor(() => levelButton(2), 'the picker after canceling a level switch');
@@ -758,16 +772,21 @@
 
           backToLevels()?.click();
           await waitFor(() => levelButton(1), 'Level 1 before confirming a level change');
+          const saveBeforeConfirmedPickerDiscard = gameWindow.localStorage.getItem('hexpour:in-progress');
           levelButton(1).click();
           const confirmDialog = await waitFor(
             () => gameDocument.querySelector('.overlay.open [role="dialog"]'),
-            'the second level-change confirmation',
+            'the second saved-run safeguard before explicit discard',
           );
-          const changeLevel = Array.from(confirmDialog.querySelectorAll('button')).find(
-            (button) => button.textContent.trim() === 'Change level',
+          const discardLevel = Array.from(confirmDialog.querySelectorAll('button')).find(
+            (button) => button.textContent.trim() === 'Start Level 1 and discard save',
           );
-          if (!changeLevel) throw new Error('Confirm level-change action is missing');
-          changeLevel.click();
+          if (!discardLevel ||
+              gameDocument.activeElement?.textContent.trim() !== 'Resume Level 2 · 1 pour' ||
+              gameWindow.localStorage.getItem('hexpour:in-progress') !== saveBeforeConfirmedPickerDiscard) {
+            throw new Error('The saved snapshot changed before the explicit level-discard action');
+          }
+          discardLevel.click();
           await waitFor(
             () => gameDocument.querySelector('#play.screen.active .topbar .title')?.textContent.trim() === 'Level 1' &&
               gameDocument.querySelector('#play.screen.active .move-status')?.textContent === 'Pours: 0' &&
@@ -1128,6 +1147,33 @@
           levelButton(2).click();
           await waitForLevelTwo(0);
 
+          const settingsTrigger = gameDocument.querySelector(
+            '#play.screen.active .topbar button[aria-label="Open settings"]',
+          );
+          if (!settingsTrigger) throw new Error('Settings control is missing before picker preservation coverage');
+          settingsTrigger.click();
+          const settingsDialog = await waitFor(
+            () => gameDocument.querySelector('.overlay.open [role="dialog"]'),
+            'Settings before creating an active picker save',
+          );
+          const muteToggle = settingsDialog.querySelector('.settings-row button');
+          if (!muteToggle) throw new Error('Mute preference control is missing');
+          if (muteToggle.textContent.trim() === 'Off') muteToggle.click();
+          await waitFor(
+            () => JSON.parse(gameWindow.localStorage.getItem('hexpour_v1') || 'null')?.mute === true,
+            'the saved Mute preference',
+          );
+          Array.from(settingsDialog.querySelectorAll('button')).find(
+            (button) => button.textContent.trim() === 'Close',
+          )?.click();
+          await waitFor(() => !gameDocument.querySelector('.overlay.open [role="dialog"]'), 'Settings to close');
+          const pickerPersistBeforeChoices = gameWindow.localStorage.getItem('hexpour_v1');
+          const pickerPersistState = JSON.parse(pickerPersistBeforeChoices || 'null');
+          if (pickerPersistState?.unlocked !== 3 || pickerPersistState?.mute !== true ||
+              pickerPersistState?.adsRemoved !== false) {
+            throw new Error('The active picker fixture does not have the expected unlock and settings state');
+          }
+
           const pickerSaveDetails = gameDocument.querySelector('#play.screen.active details.accessible-board');
           const pickerSaveSummary = pickerSaveDetails?.querySelector('summary');
           if (!pickerSaveDetails || !pickerSaveSummary) throw new Error('Level 2 controls are missing before picker save coverage');
@@ -1136,8 +1182,178 @@
           activeCell(0, 0)?.click();
           activeCell(0, 1)?.click();
           await waitForLevelTwo(1);
+          const labelsAfterFirstPickerPour = levelTwoLabels();
+          activeCell(0, 0)?.click();
+          activeCell(1, 0)?.click();
+          await waitForLevelTwo(2);
+          const saveBeforeActivePickerChoice = gameWindow.localStorage.getItem('hexpour:in-progress');
+          const activePickerSnapshot = JSON.parse(saveBeforeActivePickerChoice || 'null');
+          if (activePickerSnapshot?.version !== 1 || activePickerSnapshot.levelId !== 2 ||
+              activePickerSnapshot.moveCount !== 2 || activePickerSnapshot.undoStack?.length !== 2) {
+            throw new Error('The active picker fixture did not create a two-pour snapshot with undo history');
+          }
+
+          const activeBackToLevels = backToLevels();
+          if (!activeBackToLevels) throw new Error('Back-to-levels control is missing before active picker coverage');
+          activeBackToLevels.focus();
+          await pauseForKeyboard('enter-picker-open-levels');
+          await waitFor(() => gameDocument.querySelector('#levels.screen.active'), 'Level Select for the active saved run');
+          const activePickerTarget = levelButton(3);
+          if (!activePickerTarget || activePickerTarget.disabled) {
+            throw new Error('The active saved-run test has no different unlocked target level');
+          }
+          activePickerTarget.focus();
+          await pauseForKeyboard('enter-picker-level-initial');
+          const activePickerDialog = await waitFor(
+            () => gameDocument.querySelector('.overlay.open [role="dialog"]'),
+            'the three-choice safeguard for a different level while its saved run is active',
+          );
+          const activePickerButtons = Array.from(activePickerDialog.querySelectorAll('button'));
+          const expectedActivePickerChoices = [
+            'Resume Level 2 · 2 pours',
+            'Keep saved progress',
+            'Start Level 3 and discard save',
+          ];
+          if (activePickerDialog.getAttribute('aria-modal') !== 'true' ||
+              activePickerDialog.getAttribute('aria-labelledby') !== 'saved-progress-title' ||
+              activePickerDialog.getAttribute('aria-describedby') !== 'saved-progress-description' ||
+              activePickerDialog.querySelector('#saved-progress-description')?.textContent !==
+                'You have made 2 pours in Level 2. Starting Level 3 will discard that saved board.' ||
+              JSON.stringify(activePickerButtons.map((button) => button.textContent.trim())) !==
+                JSON.stringify(expectedActivePickerChoices) ||
+              gameDocument.activeElement !== activePickerButtons[0] ||
+              gameWindow.localStorage.getItem('hexpour:in-progress') !== saveBeforeActivePickerChoice ||
+              gameWindow.localStorage.getItem('hexpour_v1') !== pickerPersistBeforeChoices) {
+            throw new Error('Active Level Select did not expose the accessible safe choices without changing saved state');
+          }
+
+          await pauseForKeyboard('escape-picker-switch');
+          await waitFor(
+            () => gameDocument.querySelector('#levels.screen.active') &&
+              !gameDocument.querySelector('.overlay.open [role="dialog"]'),
+            'Escape to cancel the active picker safeguard',
+          );
+          if (gameDocument.activeElement !== activePickerTarget ||
+              gameWindow.localStorage.getItem('hexpour:in-progress') !== saveBeforeActivePickerChoice ||
+              gameWindow.localStorage.getItem('hexpour_v1') !== pickerPersistBeforeChoices) {
+            throw new Error('Escape did not preserve the active snapshot and return focus to the selected level');
+          }
+
+          activePickerTarget.focus();
+          await pauseForKeyboard('enter-picker-level-after-escape');
+          const keepActivePickerDialog = await waitFor(
+            () => gameDocument.querySelector('.overlay.open [role="dialog"]'),
+            'the active picker safeguard after Escape cancellation',
+          );
+          const keepActivePickerButton = Array.from(keepActivePickerDialog.querySelectorAll('button')).find(
+            (button) => button.textContent.trim() === 'Keep saved progress',
+          );
+          if (!keepActivePickerButton) throw new Error('Keep saved progress action is missing in the active picker dialog');
+          await pauseForKeyboard('tab-picker-keep');
+          if (gameDocument.activeElement !== keepActivePickerButton) {
+            throw new Error('Tab did not move from Resume to Keep saved progress');
+          }
+          await pauseForKeyboard('enter-picker-keep');
+          await waitFor(
+            () => gameDocument.querySelector('#levels.screen.active') &&
+              !gameDocument.querySelector('.overlay.open [role="dialog"]'),
+            'Keep saved progress to cancel the active picker choice',
+          );
+          if (gameDocument.activeElement !== activePickerTarget ||
+              gameWindow.localStorage.getItem('hexpour:in-progress') !== saveBeforeActivePickerChoice ||
+              gameWindow.localStorage.getItem('hexpour_v1') !== pickerPersistBeforeChoices) {
+            throw new Error('Keep saved progress did not preserve the exact snapshot and selected-level focus');
+          }
+
+          activePickerTarget.focus();
+          await pauseForKeyboard('enter-picker-level-after-keep');
+          const resumeActivePickerDialog = await waitFor(
+            () => gameDocument.querySelector('.overlay.open [role="dialog"]'),
+            'the active picker safeguard before Resume',
+          );
+          const resumeActivePickerButton = resumeActivePickerDialog.querySelector('button');
+          if (!resumeActivePickerButton || gameDocument.activeElement !== resumeActivePickerButton) {
+            throw new Error('The active picker dialog did not initially focus Resume');
+          }
+          await pauseForKeyboard('enter-picker-resume');
+          await waitForLevelTwo(2);
+          const activeUndo = Array.from(gameDocument.querySelectorAll('#play.screen.active .toolbar button')).find(
+            (button) => button.textContent.trim() === 'Undo',
+          );
+          const activeBoardSummary = gameDocument.querySelector('#play.screen.active .accessible-board > summary');
+          if (gameWindow.localStorage.getItem('hexpour:in-progress') !== saveBeforeActivePickerChoice ||
+              gameWindow.localStorage.getItem('hexpour_v1') !== pickerPersistBeforeChoices ||
+              !activeUndo || activeUndo.disabled || gameDocument.activeElement !== activeBoardSummary) {
+            throw new Error('Resume did not restore the exact active snapshot, undo history, preferences, and board focus');
+          }
+          activeUndo.focus();
+          await pauseForKeyboard('enter-picker-undo');
+          await waitForLevelTwo(1);
+          const activeSnapshotAfterUndo = JSON.parse(gameWindow.localStorage.getItem('hexpour:in-progress') || 'null');
+          if (activeSnapshotAfterUndo?.moveCount !== 1 || activeSnapshotAfterUndo.undoStack?.length !== 1 ||
+              JSON.stringify(levelTwoLabels()) !== JSON.stringify(labelsAfterFirstPickerPour) ||
+              gameWindow.localStorage.getItem('hexpour_v1') !== pickerPersistBeforeChoices) {
+            throw new Error('Resumed Undo history did not reverse one pour while retaining the settings and unlock');
+          }
+
+          const backAfterPickerResume = backToLevels();
+          if (!backAfterPickerResume) throw new Error('Back-to-levels control is missing before explicit discard');
+          backAfterPickerResume.focus();
+          await pauseForKeyboard('enter-picker-back-levels');
+          await waitFor(() => gameDocument.querySelector('#levels.screen.active'), 'Level Select before active-run discard');
+          const discardPickerTarget = levelButton(3);
+          if (!discardPickerTarget) throw new Error('Level 3 is missing before explicit picker discard');
+          discardPickerTarget.focus();
+          await pauseForKeyboard('enter-picker-discard-level');
+          const discardActivePickerDialog = await waitFor(
+            () => gameDocument.querySelector('.overlay.open [role="dialog"]'),
+            'the active picker safeguard before explicit discard',
+          );
+          const discardActivePickerButtons = Array.from(discardActivePickerDialog.querySelectorAll('button'));
+          const saveBeforeExplicitPickerDiscard = gameWindow.localStorage.getItem('hexpour:in-progress');
+          if (discardActivePickerDialog.querySelector('#saved-progress-description')?.textContent !==
+                'You have made 1 pour in Level 2. Starting Level 3 will discard that saved board.' ||
+              !saveBeforeExplicitPickerDiscard ||
+              gameWindow.localStorage.getItem('hexpour_v1') !== pickerPersistBeforeChoices) {
+            throw new Error('The active snapshot disappeared before the explicit discard choice');
+          }
+          await pauseForKeyboard('tab-picker-discard-keep');
+          if (gameDocument.activeElement !== discardActivePickerButtons[1]) {
+            throw new Error('Tab did not move to Keep saved progress before explicit discard');
+          }
+          await pauseForKeyboard('tab-picker-discard-action');
+          if (gameDocument.activeElement !== discardActivePickerButtons[2]) {
+            throw new Error('Tab did not move to the explicit discard action');
+          }
+          await pauseForKeyboard('enter-picker-discard');
+          await waitFor(
+            () => gameDocument.querySelector('#play.screen.active .topbar .title')?.textContent.trim() === 'Level 3' &&
+              gameDocument.querySelector('#play.screen.active .move-status')?.textContent === 'Pours: 0' &&
+              !gameDocument.querySelector('.overlay.open [role="dialog"]'),
+            'the explicitly selected fresh Level 3 board',
+          );
+          const undoAfterPickerDiscard = Array.from(gameDocument.querySelectorAll('#play.screen.active .toolbar button')).find(
+            (button) => button.textContent.trim() === 'Undo',
+          );
+          if (gameWindow.localStorage.getItem('hexpour:in-progress') !== null ||
+              gameWindow.localStorage.getItem('hexpour_v1') !== pickerPersistBeforeChoices ||
+              !undoAfterPickerDiscard?.disabled ||
+              gameDocument.activeElement !== gameDocument.querySelector('#play.screen.active .accessible-board > summary')) {
+            throw new Error('Explicit discard did not clear only the active run while retaining settings, unlocks, and focus');
+          }
+
+          backToLevels()?.click();
+          await waitFor(() => levelButton(2), 'Level 2 after the active picker discard regression');
+          levelButton(2).click();
+          await waitForLevelTwo(0);
+          const pickerSaveDetailsAfterDiscard = gameDocument.querySelector('#play.screen.active details.accessible-board');
+          if (!pickerSaveDetailsAfterDiscard?.open) pickerSaveDetailsAfterDiscard?.querySelector('summary')?.click();
+          await waitFor(() => pickerSaveDetailsAfterDiscard?.open, 'Level 2 controls after the active picker regression');
+          activeCell(0, 0)?.click();
+          activeCell(0, 1)?.click();
+          await waitForLevelTwo(1);
           const saveBeforePickerChoice = gameWindow.localStorage.getItem('hexpour:in-progress');
-          if (!saveBeforePickerChoice) throw new Error('Level 2 did not save before testing a different picker choice');
+          if (!saveBeforePickerChoice) throw new Error('Level 2 did not save before testing a reloaded picker choice');
 
           const pickerReload = await reloadToHome(gameWindow, gameDocument);
           gameWindow = pickerReload.gameWindow;
@@ -1229,6 +1445,10 @@
               confirmationResumeReturnsToSavedRunAfterReload: true,
               keepSaveAndResumeOptionsSurviveReload: true,
               explicitPlayDiscardClearsSaveWithoutChangingUnlocks: true,
+              activePickerOffersResumeKeepAndExplicitDiscard: true,
+              activePickerEscapeAndKeepPreserveExactSnapshotAndSelectedFocus: true,
+              activePickerResumeRetainsUndoHistoryAndBoardFocus: true,
+              explicitPickerDiscardClearsOnlyRunAndKeepsUnlocksSettings: true,
               pickerLevelChangeRequiresConfirmationAfterReload: true,
               cancelingPickerChangeRetainsSaveAndFocus: true,
               homeResumeBounds,

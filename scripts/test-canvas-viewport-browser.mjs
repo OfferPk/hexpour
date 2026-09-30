@@ -44,6 +44,20 @@ const keyByStage = {
   'tab-saved-progress-discard': 'Tab',
   'tab-saved-progress-wrap': 'Tab',
   'escape-saved-progress': 'Escape',
+  'enter-picker-open-levels': 'Enter',
+  'enter-picker-level-initial': 'Enter',
+  'escape-picker-switch': 'Escape',
+  'enter-picker-level-after-escape': 'Enter',
+  'tab-picker-keep': 'Tab',
+  'enter-picker-keep': 'Enter',
+  'enter-picker-level-after-keep': 'Enter',
+  'enter-picker-resume': 'Enter',
+  'enter-picker-undo': 'Enter',
+  'enter-picker-back-levels': 'Enter',
+  'enter-picker-discard-level': 'Enter',
+  'tab-picker-discard-keep': 'Tab',
+  'tab-picker-discard-action': 'Tab',
+  'enter-picker-discard': 'Enter',
 };
 
 const profileDirectory = await mkdtemp(join(tmpdir(), 'hexpour-viewport-chromium-'));
