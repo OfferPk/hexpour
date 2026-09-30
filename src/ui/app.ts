@@ -283,6 +283,68 @@ export function mountApp(root: HTMLElement): void {
     } else if (s === 'win') renderWin();
   }
 
+  function findHomeResumeProgress(): { levelId: number; moveCount: number } | null {
+    const lastUnlocked = Math.min(persist.unlocked, LEVEL_COUNT);
+    for (let id = 1; id <= lastUnlocked; id++) {
+      const definition = getLevel(id);
+      if (!definition) continue;
+      const saved = loadInProgress(definition);
+      if (saved) return { levelId: saved.levelId, moveCount: saved.moveCount };
+    }
+    return null;
+  }
+
+  function showSavedProgressConfirmation(
+    saved: { levelId: number; moveCount: number },
+    targetLevel: number,
+    returnFocus: HTMLElement | null,
+  ): void {
+    el.overlay.className = 'overlay open';
+    el.overlay.innerHTML = '';
+    const modal = div('modal saved-progress-modal');
+    const title = document.createElement('h2');
+    title.id = 'saved-progress-title';
+    title.textContent = 'Saved puzzle in progress';
+    const description = document.createElement('p');
+    description.id = 'saved-progress-description';
+    description.textContent =
+      `You have made ${formatPourCount(saved.moveCount)} in Level ${saved.levelId}. ` +
+      `Starting Level ${targetLevel} will discard that saved board.`;
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', title.id);
+    modal.setAttribute('aria-describedby', description.id);
+
+    const close = () => {
+      el.overlay.className = 'overlay';
+      el.overlay.innerHTML = '';
+    };
+    const resumeLabel = `Resume Level ${saved.levelId} · ${formatPourCount(saved.moveCount)}`;
+    modal.append(
+      title,
+      description,
+      button(resumeLabel, 'btn block', () => {
+        close();
+        startLevel(saved.levelId);
+        focusPlayControls();
+      }, resumeLabel),
+      button('Keep saved progress', 'btn secondary block', () => {
+        close();
+        const fallback = Array.from(el.home.querySelectorAll('button')).find(
+          (item) => item.textContent?.trim() === 'Play',
+        );
+        (returnFocus?.isConnected ? returnFocus : fallback)?.focus();
+      }),
+      button(`Start Level ${targetLevel} and discard save`, 'btn danger block', () => {
+        close();
+        startLevel(targetLevel, true);
+        focusPlayControls();
+      }),
+    );
+    el.overlay.append(modal);
+    focusDialog(modal);
+  }
+
   // —— HOME ——
   function renderHome(): void {
     el.home.innerHTML = '';
@@ -297,10 +359,18 @@ export function mountApp(root: HTMLElement): void {
       <p class="tagline">Pour colors across the hive.<br/>Not tubes — adjacent hexes only.</p>
     `;
     const actions = div('home-actions');
+    const savedProgress = findHomeResumeProgress();
+    const defaultLevel = Math.min(persist.unlocked, LEVEL_COUNT);
     actions.append(
-      button('Play', 'btn block', () =>
-        startLevel(Math.min(persist.unlocked, LEVEL_COUNT)),
-      ),
+      button('Play', 'btn block', () => startLevel(defaultLevel)),
+    );
+    if (savedProgress) {
+      const label = `Resume Level ${savedProgress.levelId} · ${formatPourCount(savedProgress.moveCount)}`;
+      actions.append(
+        button(label, 'btn secondary block home-resume', () => startLevel(savedProgress.levelId), label),
+      );
+    }
+    actions.append(
       button('Levels', 'btn secondary block', () => setScreen('levels')),
       button('How to play', 'btn ghost block', () => openHowto(false)),
       button('Settings', 'btn ghost block', () => openSettings()),
@@ -457,6 +527,15 @@ export function mountApp(root: HTMLElement): void {
       const confirmation = getLevelChangeConfirmation(levelId, id, undoStack.length);
       if (confirmation) {
         showLevelChangeConfirmation(id, confirmation);
+        return;
+      }
+    }
+    if (!discardConfirmed) {
+      const savedProgress = findHomeResumeProgress();
+      if (savedProgress && savedProgress.levelId !== id) {
+        const active = document.activeElement;
+        const returnFocus = active instanceof HTMLElement ? active : null;
+        showSavedProgressConfirmation(savedProgress, id, returnFocus);
         return;
       }
     }

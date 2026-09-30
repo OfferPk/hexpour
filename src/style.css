@@ -103,6 +103,11 @@ h2 { font-size: 1.2rem; color: var(--cream); }
   max-width: 280px;
   margin: 0 auto 18px;
 }
+.home-actions .home-resume {
+  min-height: 44px;
+  padding: 10px 12px;
+  font-size: 0.92rem;
+}
 
 .topbar {
   display: flex;

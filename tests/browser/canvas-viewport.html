@@ -911,6 +911,254 @@
           levelTwoAfterSolve.click();
           await waitForLevelTwo(0);
 
+          const resumeDetails = gameDocument.querySelector('#play.screen.active details.accessible-board');
+          const resumeSummary = resumeDetails?.querySelector('summary');
+          if (!resumeDetails || !resumeSummary) throw new Error('Level 2 controls are missing before Home Resume coverage');
+          if (!resumeDetails.open) resumeSummary.click();
+          await waitFor(() => resumeDetails.open, 'Level 2 controls before creating a Home Resume save');
+          const resumeSource = activeCell(0, 0);
+          const resumeDestination = activeCell(0, 1);
+          if (!resumeSource || !resumeDestination) throw new Error('Home Resume test cells are missing');
+          resumeSource.click();
+          resumeDestination.click();
+          await waitForLevelTwo(1);
+          const saveBeforeHomeResume = gameWindow.localStorage.getItem('hexpour:in-progress');
+          if (!saveBeforeHomeResume) throw new Error('A replayed Level 2 did not create its in-progress save');
+
+          backToLevels()?.click();
+          await waitFor(() => levelButton(2), 'the level picker before returning Home for Resume');
+          gameDocument.querySelector('#levels.screen.active .topbar button[aria-label="Back to home"]')?.click();
+          await waitFor(() => gameDocument.querySelector('#home.screen.active'), 'Home with a saved Level 2 puzzle');
+          const homeResumeButton = () => Array.from(
+            gameDocument.querySelectorAll('#home.screen.active button'),
+          ).find((button) => button.classList.contains('home-resume'));
+          const expectedHomeResume = 'Resume Level 2 · 1 pour';
+          const resumeButtonBeforeReload = homeResumeButton();
+          if (!resumeButtonBeforeReload || resumeButtonBeforeReload.textContent.trim() !== expectedHomeResume ||
+              resumeButtonBeforeReload.getAttribute('aria-label') !== expectedHomeResume ||
+              resumeButtonBeforeReload.type !== 'button') {
+            throw new Error('Home does not provide the exact visible and accessible direct Resume action');
+          }
+          const homeResumeBounds = assertVisibleInViewport(
+            resumeButtonBeforeReload,
+            'The Home Resume action',
+            gameWindow,
+          );
+          const homePlayBeforeReload = Array.from(
+            gameDocument.querySelectorAll('#home.screen.active button'),
+          ).find((button) => button.textContent.trim() === 'Play');
+          if (!homePlayBeforeReload || homePlayBeforeReload.className !== 'btn block') {
+            throw new Error('Adding Resume changed the existing Home Play control');
+          }
+          resumeButtonBeforeReload.click();
+          await waitForLevelTwo(1);
+          if (gameWindow.localStorage.getItem('hexpour:in-progress') !== saveBeforeHomeResume) {
+            throw new Error('Choosing Home Resume did not retain the saved puzzle');
+          }
+
+          const homeRoundTrip = await reloadToHome(gameWindow, gameDocument);
+          gameWindow = homeRoundTrip.gameWindow;
+          gameDocument = homeRoundTrip.gameDocument;
+          pendingFrames = homeRoundTrip.pendingFrames;
+          const resumeAfterReload = homeResumeButton();
+          const playAfterReload = Array.from(
+            gameDocument.querySelectorAll('#home.screen.active button'),
+          ).find((button) => button.textContent.trim() === 'Play');
+          if (!resumeAfterReload || resumeAfterReload.textContent.trim() !== expectedHomeResume || !playAfterReload ||
+              gameWindow.localStorage.getItem('hexpour:in-progress') !== saveBeforeHomeResume) {
+            throw new Error('Home lost the Resume action or saved board after a true reload');
+          }
+          resumeAfterReload.click();
+          await waitForLevelTwo(1);
+          const resumedStatus = gameDocument.querySelector('.toast[role="status"]');
+          if (gameWindow.localStorage.getItem('hexpour:in-progress') !== saveBeforeHomeResume ||
+              resumedStatus?.textContent !== 'Resumed Level 2 · 1 pour' ||
+              !resumedStatus.classList.contains('show')) {
+            throw new Error('Direct Home Resume after reload did not restore or retain the saved board');
+          }
+
+          const playChoiceReload = await reloadToHome(gameWindow, gameDocument);
+          gameWindow = playChoiceReload.gameWindow;
+          gameDocument = playChoiceReload.gameDocument;
+          pendingFrames = playChoiceReload.pendingFrames;
+          const defaultPlay = Array.from(
+            gameDocument.querySelectorAll('#home.screen.active button'),
+          ).find((button) => button.textContent.trim() === 'Play');
+          if (!defaultPlay || !homeResumeButton()) throw new Error('Home did not offer both Play and Resume after reload');
+          defaultPlay.click();
+          const savedProgressDialog = await waitFor(
+            () => gameDocument.querySelector('.overlay.open [role="dialog"]'),
+            'Play to explain that starting the unlocked level will replace the saved lower-level puzzle',
+          );
+          const savedProgressDescription = savedProgressDialog.querySelector('#saved-progress-description');
+          const resumeFromDialog = Array.from(savedProgressDialog.querySelectorAll('button')).find(
+            (button) => button.textContent.trim() === 'Resume Level 2 · 1 pour',
+          );
+          const keepSavedProgress = Array.from(savedProgressDialog.querySelectorAll('button')).find(
+            (button) => button.textContent.trim() === 'Keep saved progress',
+          );
+          const discardSavedProgress = Array.from(savedProgressDialog.querySelectorAll('button')).find(
+            (button) => button.textContent.trim() === 'Start Level 3 and discard save',
+          );
+          if (savedProgressDialog.getAttribute('aria-modal') !== 'true' ||
+              savedProgressDialog.getAttribute('aria-labelledby') !== 'saved-progress-title' ||
+              savedProgressDialog.getAttribute('aria-describedby') !== 'saved-progress-description' ||
+              savedProgressDescription?.textContent !==
+                'You have made 1 pour in Level 2. Starting Level 3 will discard that saved board.' ||
+              !resumeFromDialog || !keepSavedProgress || !discardSavedProgress ||
+              gameDocument.activeElement !== resumeFromDialog ||
+              gameWindow.localStorage.getItem('hexpour:in-progress') !== saveBeforeHomeResume) {
+            throw new Error('Play did not provide an accessible, non-destructive choice before replacing saved progress');
+          }
+          resumeFromDialog.click();
+          await waitForLevelTwo(1);
+          if (gameWindow.localStorage.getItem('hexpour:in-progress') !== saveBeforeHomeResume) {
+            throw new Error('Choosing Resume from the Play confirmation did not retain the saved board');
+          }
+          const resumeChoiceReload = await reloadToHome(gameWindow, gameDocument);
+          gameWindow = resumeChoiceReload.gameWindow;
+          gameDocument = resumeChoiceReload.gameDocument;
+          pendingFrames = resumeChoiceReload.pendingFrames;
+          const homeAfterDialogResume = homeResumeButton();
+          const playAfterDialogResume = Array.from(
+            gameDocument.querySelectorAll('#home.screen.active button'),
+          ).find((button) => button.textContent.trim() === 'Play');
+          if (!homeAfterDialogResume || !playAfterDialogResume ||
+              gameWindow.localStorage.getItem('hexpour:in-progress') !== saveBeforeHomeResume) {
+            throw new Error('Choosing Resume from the confirmation did not return to a resumable Home after reload');
+          }
+          playAfterDialogResume.click();
+          const keepDialogAfterResume = await waitFor(
+            () => gameDocument.querySelector('.overlay.open [role="dialog"]'),
+            'Play confirmation after returning from its Resume choice',
+          );
+          const keepAfterDialogResume = Array.from(keepDialogAfterResume.querySelectorAll('button')).find(
+            (button) => button.textContent.trim() === 'Keep saved progress',
+          );
+          if (!keepAfterDialogResume || gameWindow.localStorage.getItem('hexpour:in-progress') !== saveBeforeHomeResume) {
+            throw new Error('The Play confirmation lost saved progress before the Keep choice');
+          }
+          keepAfterDialogResume.click();
+          await waitFor(
+            () => gameDocument.querySelector('#home.screen.active') &&
+              !gameDocument.querySelector('.overlay.open [role="dialog"]'),
+            'Keep saved progress to return to Home',
+          );
+          if (gameWindow.localStorage.getItem('hexpour:in-progress') !== saveBeforeHomeResume ||
+              !homeResumeButton()) {
+            throw new Error('Keeping saved progress removed the Home Resume action or puzzle snapshot');
+          }
+
+          const keptSaveReload = await reloadToHome(gameWindow, gameDocument);
+          gameWindow = keptSaveReload.gameWindow;
+          gameDocument = keptSaveReload.gameDocument;
+          pendingFrames = keptSaveReload.pendingFrames;
+          const retainedResume = homeResumeButton();
+          const playAfterKeepingSave = Array.from(
+            gameDocument.querySelectorAll('#home.screen.active button'),
+          ).find((button) => button.textContent.trim() === 'Play');
+          if (!retainedResume || retainedResume.textContent.trim() !== 'Resume Level 2 · 1 pour' ||
+              !playAfterKeepingSave ||
+              gameWindow.localStorage.getItem('hexpour:in-progress') !== saveBeforeHomeResume) {
+            throw new Error('Keeping the save did not preserve a resumable Home action after reload');
+          }
+          playAfterKeepingSave.click();
+          const discardDialogAfterReload = await waitFor(
+            () => gameDocument.querySelector('.overlay.open [role="dialog"]'),
+            'Play to repeat its save-protection choice after reload',
+          );
+          const confirmDiscard = Array.from(discardDialogAfterReload.querySelectorAll('button')).find(
+            (button) => button.textContent.trim() === 'Start Level 3 and discard save',
+          );
+          if (!confirmDiscard || gameWindow.localStorage.getItem('hexpour:in-progress') !== saveBeforeHomeResume) {
+            throw new Error('The save was removed before the explicit discard choice after reload');
+          }
+          confirmDiscard.click();
+          await waitFor(
+            () => gameDocument.querySelector('#play.screen.active .topbar .title')?.textContent.trim() === 'Level 3' &&
+              gameDocument.querySelector('#play.screen.active .move-status')?.textContent === 'Pours: 0' &&
+              !gameDocument.querySelector('.overlay.open [role="dialog"]'),
+            'Play to keep starting the highest unlocked Level 3 by default',
+          );
+          const unlockAfterDefaultPlay = JSON.parse(gameWindow.localStorage.getItem('hexpour_v1') || 'null')?.unlocked;
+          if (gameWindow.localStorage.getItem('hexpour:in-progress') !== null || unlockAfterDefaultPlay !== 3) {
+            throw new Error('Choosing default Play did not clear the replaced save while preserving unlock state');
+          }
+          backToLevels()?.click();
+          await waitFor(() => levelButton(2), 'Level 2 after verifying the explicit Level 3 Play choice');
+          levelButton(2).click();
+          await waitForLevelTwo(0);
+
+          const pickerSaveDetails = gameDocument.querySelector('#play.screen.active details.accessible-board');
+          const pickerSaveSummary = pickerSaveDetails?.querySelector('summary');
+          if (!pickerSaveDetails || !pickerSaveSummary) throw new Error('Level 2 controls are missing before picker save coverage');
+          if (!pickerSaveDetails.open) pickerSaveSummary.click();
+          await waitFor(() => pickerSaveDetails.open, 'Level 2 controls before creating a picker save');
+          activeCell(0, 0)?.click();
+          activeCell(0, 1)?.click();
+          await waitForLevelTwo(1);
+          const saveBeforePickerChoice = gameWindow.localStorage.getItem('hexpour:in-progress');
+          if (!saveBeforePickerChoice) throw new Error('Level 2 did not save before testing a different picker choice');
+
+          const pickerReload = await reloadToHome(gameWindow, gameDocument);
+          gameWindow = pickerReload.gameWindow;
+          gameDocument = pickerReload.gameDocument;
+          pendingFrames = pickerReload.pendingFrames;
+          const levelsAfterPickerReload = Array.from(
+            gameDocument.querySelectorAll('#home.screen.active button'),
+          ).find((button) => button.textContent.trim() === 'Levels');
+          if (!levelsAfterPickerReload) throw new Error('Home Levels control is missing after the picker safety reload');
+          levelsAfterPickerReload.click();
+          await waitFor(() => levelButton(3), 'Level 3 in the unlocked picker after reload');
+          const otherUnlockedLevel = levelButton(3);
+          otherUnlockedLevel.focus();
+          otherUnlockedLevel.click();
+          const pickerSaveDialog = await waitFor(
+            () => gameDocument.querySelector('.overlay.open [role="dialog"]'),
+            'the picker to ask before replacing a saved Level 2 board with Level 3',
+          );
+          const keepPickerSave = Array.from(pickerSaveDialog.querySelectorAll('button')).find(
+            (button) => button.textContent.trim() === 'Keep saved progress',
+          );
+          if (!keepPickerSave ||
+              pickerSaveDialog.querySelector('#saved-progress-description')?.textContent !==
+                'You have made 1 pour in Level 2. Starting Level 3 will discard that saved board.' ||
+              gameWindow.localStorage.getItem('hexpour:in-progress') !== saveBeforePickerChoice) {
+            throw new Error('Level selection did not protect the saved run after reload');
+          }
+          keepPickerSave.click();
+          await waitFor(
+            () => gameDocument.querySelector('#levels.screen.active') &&
+              !gameDocument.querySelector('.overlay.open [role="dialog"]'),
+            'the picker to retain the save after canceling a different-level choice',
+          );
+          if (gameDocument.activeElement !== otherUnlockedLevel ||
+              gameWindow.localStorage.getItem('hexpour:in-progress') !== saveBeforePickerChoice) {
+            throw new Error('Canceling a different picker choice did not preserve the save and focus');
+          }
+          levelButton(2).click();
+          await waitForLevelTwo(1);
+          if (gameWindow.localStorage.getItem('hexpour:in-progress') !== saveBeforePickerChoice) {
+            throw new Error('Resuming the saved level from the picker changed its snapshot');
+          }
+          const pickerRestart = Array.from(
+            gameDocument.querySelectorAll('#play.screen.active .toolbar button'),
+          ).find((button) => button.textContent.trim() === 'Restart');
+          pickerRestart?.click();
+          const pickerRestartDialog = await waitFor(
+            () => gameDocument.querySelector('.overlay.open [role="dialog"]'),
+            'Restart confirmation before restoring a fresh Level 2 fixture state',
+          );
+          const confirmPickerRestart = Array.from(pickerRestartDialog.querySelectorAll('button')).find(
+            (button) => button.textContent.trim() === 'Restart level',
+          );
+          if (!confirmPickerRestart) throw new Error('The picker safety fixture could not clear its saved Level 2 board');
+          confirmPickerRestart.click();
+          await waitForLevelTwo(0);
+          if (gameWindow.localStorage.getItem('hexpour:in-progress') !== null) {
+            throw new Error('Confirming the fixture Restart did not clear the saved Level 2 board');
+          }
+
           return {
             result: {
               backNavigationKeepsBoardWithoutPrompt: true,
@@ -934,6 +1182,17 @@
               solvingSavedBoardClearsPickerCue: true,
               restartCancelPreservesProgressAcrossReload: true,
               confirmedRestartClearsProgressAcrossReload: true,
+              homeResumeIsVisibleAccessibleAndCompactAt320px: true,
+              homeResumeRestoresExactBoardAndRetainsSave: true,
+              directResumeWorksAfterTrueReload: true,
+              playStillStartsHighestUnlockedLevel: true,
+              playRequiresExplicitDiscardConfirmation: true,
+              confirmationResumeReturnsToSavedRunAfterReload: true,
+              keepSaveAndResumeOptionsSurviveReload: true,
+              explicitPlayDiscardClearsSaveWithoutChangingUnlocks: true,
+              pickerLevelChangeRequiresConfirmationAfterReload: true,
+              cancelingPickerChangeRetainsSaveAndFocus: true,
+              homeResumeBounds,
             },
             gameWindow,
             gameDocument,
