@@ -87,6 +87,7 @@ export function mountApp(root: HTMLElement): void {
   let hintButton: HTMLButtonElement | null = null;
   let restartButton: HTMLButtonElement | null = null;
   let toastTimeout = 0;
+  let toastGeneration = 0;
 
   const el = {
     home: div('screen', 'home'),
@@ -101,6 +102,7 @@ export function mountApp(root: HTMLElement): void {
   el.toast.setAttribute('role', 'status');
   el.toast.setAttribute('aria-live', 'polite');
   el.toast.setAttribute('aria-atomic', 'true');
+  el.toast.hidden = true;
 
   // Rewarded hints remain explicit demo stubs; interstitials never block play.
   setRewardedPresenter(async (reason) => {
@@ -114,17 +116,27 @@ export function mountApp(root: HTMLElement): void {
   });
 
   function showToast(msg: string): void {
+    window.clearTimeout(toastTimeout);
+    toastTimeout = 0;
+    const generation = ++toastGeneration;
+    el.toast.hidden = false;
     el.toast.textContent = msg;
     el.toast.classList.add('show');
-    window.clearTimeout(toastTimeout);
-    toastTimeout = window.setTimeout(() => el.toast.classList.remove('show'), 1600);
+    toastTimeout = window.setTimeout(() => {
+      if (generation !== toastGeneration) return;
+      toastTimeout = 0;
+      el.toast.classList.remove('show');
+      el.toast.hidden = true;
+    }, 1600);
   }
 
   function clearToast(): void {
+    toastGeneration += 1;
     window.clearTimeout(toastTimeout);
     toastTimeout = 0;
     el.toast.classList.remove('show');
     el.toast.textContent = '';
+    el.toast.hidden = true;
   }
 
   function showModalStubConfirm(
@@ -284,6 +296,7 @@ export function mountApp(root: HTMLElement): void {
   }
 
   function setScreen(s: Screen): void {
+    if (s !== screen && !el.toast.hidden) clearToast();
     if (screen === 'play' && s !== 'play') {
       cleanupPlay?.();
       cleanupPlay = null;
@@ -315,6 +328,7 @@ export function mountApp(root: HTMLElement): void {
     }
     if (screen !== 'play' || !selected) return;
     event.preventDefault();
+    clearToast();
     selected = null;
     refreshCellControls();
   });
@@ -742,6 +756,7 @@ export function mountApp(root: HTMLElement): void {
       const y = ev.clientY - rect.top;
       const hit = hitTest(board, layout, x, y);
       if (!hit) {
+        clearToast();
         selected = null;
         refreshCellControls();
         return;
@@ -760,6 +775,7 @@ export function mountApp(root: HTMLElement): void {
     if (!board) return;
     const cell = board.cells.get(`${hit.q},${hit.r}`);
     if (!cell) {
+      clearToast();
       selected = null;
       refreshCellControls();
       return;
@@ -775,12 +791,14 @@ export function mountApp(root: HTMLElement): void {
         showToast('Pick a cell with colors');
         return;
       }
+      clearToast();
       selected = hit;
       hint = null;
       refreshCellControls();
       return;
     }
     if (selected.q === hit.q && selected.r === hit.r) {
+      clearToast();
       selected = null;
       refreshCellControls();
       return;
@@ -1051,6 +1069,7 @@ export function mountApp(root: HTMLElement): void {
   }
 
   function doRestart(): void {
+    clearToast();
     const confirmation = getRestartConfirmation(levelId, undoStack.length);
     if (!confirmation) {
       startLevel(levelId);
