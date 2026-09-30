@@ -120,7 +120,7 @@ try {
   await server.listen();
   const address = server.httpServer?.address();
   if (!address || typeof address === 'string') throw new Error('Vite did not bind a loopback TCP address.');
-  const fixtureUrl = `http://127.0.0.1:${address.port}/hexpour/tests/browser/canvas-viewport.html?width=844&height=390&interactions=0`;
+  const fixtureUrl = `http://127.0.0.1:${address.port}/hexpour/tests/browser/isolated-app-host.html`;
 
   console.log(`Running blocked-destination regression in a fresh Chromium profile: ${chromiumPath}`);
   browser = spawn(chromiumPath, [
@@ -174,8 +174,16 @@ try {
   await waitFor(`(() => !!document.querySelector('#game')?.contentDocument?.querySelector('#home.screen.active'))()`, 'the app home screen in the isolated local iframe');
 
   const settingsSeed = JSON.stringify({ unlocked: 11, adsRemoved: true, mute: true });
-  await evaluate(`(() => { localStorage.setItem('hexpour_v1', ${JSON.stringify(settingsSeed)}); localStorage.removeItem('hexpour:in-progress'); document.querySelector('#game').contentWindow.location.reload(); return true; })()`);
-  await waitFor(`(() => !!document.querySelector('#game')?.contentDocument?.querySelector('#home.screen.active button'))()`, 'the app after the non-default settings seed');
+  await evaluate(`(() => {
+    const frame=document.querySelector('#game');
+    localStorage.setItem('hexpour_v1', ${JSON.stringify(settingsSeed)});
+    localStorage.removeItem('hexpour:in-progress');
+    return new Promise(resolveReload => {
+      frame.addEventListener('load', () => resolveReload(true), { once: true });
+      frame.contentWindow.location.reload();
+    });
+  })()`);
+  await waitFor(`(() => !!document.querySelector('#game')?.contentDocument?.querySelector('#home.screen.active .home-actions .level-select-opener'))()`, 'Home with the seeded Level 11 unlocks');
 
   const openedLevels = await evaluate(`(() => { const d=document.querySelector('#game').contentDocument; const b=[...d.querySelectorAll('#home.screen.active button')].find(x=>x.textContent.trim()==='Levels'); if(!b)return false; b.click(); return true; })()`);
   if (!openedLevels) throw new Error('Home Levels control was not available.');

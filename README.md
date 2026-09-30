@@ -38,7 +38,7 @@ GitHub Pages path expects assets under `/hexpour/`.
 
 **Undo** is unlimited and becomes available after your first pour. **Restart** asks before discarding a board once you have made a pour. **Hint** includes one free use per level; the play-screen button shows when its free use is spent and the next hint opens the rewarded-ad stub.
 
-The play screen shows the pour count. Keyboard and screen-reader users can expand **Keyboard and screen reader controls**, then use Tab and Enter/Space to select a source and destination. Token letters and spoken color names supplement color alone.
+The play screen shows the pour count. Keyboard and screen-reader users can expand **Keyboard and screen reader controls**, then use Tab and Enter/Space to select a source and destination; Escape deselects an armed source. Token letters and spoken color names supplement color alone.
 
 ## Differentiation
 
@@ -75,6 +75,7 @@ npm run audit:levels
 npm run test:browser:viewport
 npm run test:browser:blocked
 npm run test:browser:level-select
+npm run test:browser:selection-cancel
 ```
 
 Covers hex neighbors, legal/illegal pours, win detection, ad stubs, descriptive cell labels, validation of all 40 level definitions and opening moves, and exact shortest-solution lengths for all 40 levels. `npm run audit:levels` prints the complete 1–40 depth profile; each level has a 2,000,000-state and 60-second bound, and a bounded search is reported as incomplete rather than unsolvable.
@@ -84,6 +85,8 @@ Covers hex neighbors, legal/illegal pours, win detection, ad stubs, descriptive 
 `npm run test:browser:blocked` uses its own empty temporary Chromium profile and loopback app origin to test Level 11’s blocked-hole-then-legal-destination path. It checks that blocked feedback preserves source selection, visual targets, focus, polite live-region status, and the saved board/settings; then it verifies a legal pour and Undo.
 
 `npm run test:browser:level-select` uses a fresh disposable Chromium profile to test keyboard traversal of unlocked choices, Escape and Back focus restoration, and exact preservation of the active saved-run snapshot, undo history, unlocks, settings, and storage. Set `HEXPOUR_TEST_URL` to run the same test against the live site in a separate fresh profile.
+
+`npm run test:browser:selection-cancel` uses a fresh disposable Chromium profile to test keyboard source selection, Escape-only deselection with focus preservation and byte-for-byte saved-state preservation, reselection, and a subsequent legal Level 2 pour. Set `HEXPOUR_TEST_URL` to run it against the live site in a separate fresh profile.
 
 ## License
 

@@ -11,6 +11,7 @@
     "test:browser:viewport": "node scripts/test-canvas-viewport-browser.mjs",
     "test:browser:blocked": "node scripts/test-blocked-destination-browser.mjs",
     "test:browser:level-select": "node scripts/test-level-select-keyboard-browser.mjs",
+    "test:browser:selection-cancel": "node scripts/test-selection-cancel-browser.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },

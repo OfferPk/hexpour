@@ -289,9 +289,16 @@ export function mountApp(root: HTMLElement): void {
   }
 
   document.addEventListener('keydown', (event: KeyboardEvent) => {
-    if (event.defaultPrevented || screen !== 'levels' || event.key !== 'Escape' || el.overlay.classList.contains('open')) return;
+    if (event.defaultPrevented || event.key !== 'Escape' || el.overlay.classList.contains('open')) return;
+    if (screen === 'levels') {
+      event.preventDefault();
+      closeLevelSelect();
+      return;
+    }
+    if (screen !== 'play' || !selected) return;
     event.preventDefault();
-    closeLevelSelect();
+    selected = null;
+    refreshCellControls();
   });
 
   function findHomeResumeProgress(): { levelId: number; moveCount: number } | null {
@@ -664,6 +671,7 @@ export function mountApp(root: HTMLElement): void {
     const instructions = document.createElement('p');
     instructions.textContent =
       'Use Tab to choose a cell and Enter or Space to activate it. ' +
+      'Press Escape to deselect the current source. ' +
       'Select a cell with tokens, then select an adjacent destination.';
     const grid = div('cell-control-grid');
     grid.setAttribute('role', 'group');
