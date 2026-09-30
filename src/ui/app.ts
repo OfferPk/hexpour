@@ -35,6 +35,10 @@ import {
 } from '../ads/stubs';
 import { cellAccessibleLabel } from './cellLabel';
 import { formatPourCount } from './pourCount';
+import {
+  createCanvasResizeHandler,
+  observeElementResize,
+} from './canvasViewport';
 
 type Screen = 'home' | 'levels' | 'play' | 'win';
 
@@ -463,17 +467,15 @@ export function mountApp(root: HTMLElement): void {
     el.play.append(top, moveStatus, wrap, tools, controls);
     refreshCellControls();
 
-    const resize = () => {
-      const rect = wrap.getBoundingClientRect();
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = Math.floor(rect.width * dpr);
-      canvas.height = Math.floor(rect.height * dpr);
-      canvas.style.width = `${rect.width}px`;
-      canvas.style.height = `${rect.height}px`;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      if (board) layout = computeLayout(board, rect.width, rect.height);
-    };
+    const resize = createCanvasResizeHandler(
+      wrap,
+      canvas,
+      ctx,
+      () => window.devicePixelRatio || 1,
+      (width, height) => drawBoardFrame(performance.now(), width, height),
+    );
     resize();
+    const unobserveWrap = observeElementResize(wrap, resize);
     window.addEventListener('resize', resize);
 
     const onPointer = (ev: PointerEvent) => {
@@ -491,6 +493,7 @@ export function mountApp(root: HTMLElement): void {
     };
     canvas.addEventListener('pointerup', onPointer);
     cleanupPlay = () => {
+      unobserveWrap();
       window.removeEventListener('resize', resize);
       canvas.removeEventListener('pointerup', onPointer);
     };
@@ -633,19 +636,26 @@ export function mountApp(root: HTMLElement): void {
   function startLoop(): void {
     const tick = (now: number) => {
       if (screen !== 'play' || !board || !ctx || !canvas) return;
-      const rect = canvas.getBoundingClientRect();
-      layout = computeLayout(board, rect.width, rect.height);
-      ctx.clearRect(0, 0, rect.width, rect.height);
-      const sel: RenderSelection = {
-        selected,
-        hint,
-        shakeKey,
-        shakeUntil,
-      };
-      drawBoard(ctx, board, layout, sel, now);
+      drawBoardFrame(now);
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
+  }
+
+  function drawBoardFrame(now: number, width?: number, height?: number): void {
+    if (!board || !ctx || !canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const frameWidth = width ?? rect.width;
+    const frameHeight = height ?? rect.height;
+    layout = computeLayout(board, frameWidth, frameHeight);
+    ctx.clearRect(0, 0, frameWidth, frameHeight);
+    const selection: RenderSelection = {
+      selected,
+      hint,
+      shakeKey,
+      shakeUntil,
+    };
+    drawBoard(ctx, board, layout, selection, now);
   }
 
   // —— WIN ——
