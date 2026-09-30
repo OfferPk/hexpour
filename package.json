@@ -19,6 +19,7 @@
     "test:browser:share-cancel": "node scripts/test-share-cancel-browser.mjs",
     "test:browser:home-howto-focus": "node scripts/test-home-howto-focus-browser.mjs",
     "test:browser:hint-cancel": "node scripts/test-rewarded-hint-cancel-browser.mjs",
+    "test:browser:touch-pour": "node scripts/test-touch-pour-browser.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },

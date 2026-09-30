@@ -818,11 +818,19 @@ export function mountApp(root: HTMLElement): void {
       }
       activateCell(hit);
     };
+    const onTouchClick = (ev: MouseEvent) => {
+      if (!(ev instanceof PointerEvent) || ev.pointerType !== 'touch') return;
+      if (screen === 'play' && boardControlsSummary?.isConnected) {
+        boardControlsSummary.focus({ preventScroll: true });
+      }
+    };
     canvas.addEventListener('pointerup', onPointer);
+    canvas.addEventListener('click', onTouchClick);
     cleanupPlay = () => {
       unobserveWrap();
       window.removeEventListener('resize', resize);
       canvas.removeEventListener('pointerup', onPointer);
+      canvas.removeEventListener('click', onTouchClick);
     };
   }
 
