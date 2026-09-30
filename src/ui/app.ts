@@ -37,6 +37,7 @@ import {
 } from '../ads/stubs';
 import { cellAccessibleLabel } from './cellLabel';
 import { formatPourCount } from './pourCount';
+import { getLevelChangeConfirmation } from './levelChangeConfirmation';
 import { getRestartConfirmation } from './restartConfirmation';
 import { BOARD_CUE_LEGEND } from './boardLegend';
 import {
@@ -293,10 +294,9 @@ export function mountApp(root: HTMLElement): void {
     `;
     const actions = div('home-actions');
     actions.append(
-      button('Play', 'btn block', () => {
-        levelId = Math.min(persist.unlocked, LEVEL_COUNT);
-        startLevel(levelId);
-      }),
+      button('Play', 'btn block', () =>
+        startLevel(Math.min(persist.unlocked, LEVEL_COUNT)),
+      ),
       button('Levels', 'btn secondary block', () => setScreen('levels')),
       button('How to play', 'btn ghost block', () => openHowto(false)),
       button('Settings', 'btn ghost block', () => openSettings()),
@@ -409,9 +409,21 @@ export function mountApp(root: HTMLElement): void {
   let canvas: HTMLCanvasElement;
   let ctx: CanvasRenderingContext2D;
 
-  function startLevel(id: number): void {
+  function startLevel(id: number, discardConfirmed = false): void {
     const def = getLevel(id);
     if (!def) return;
+    if (!discardConfirmed && board && undoStack.length > 0 && !isWon(board)) {
+      if (id === levelId) {
+        setScreen('play');
+        focusPlayControls();
+        return;
+      }
+      const confirmation = getLevelChangeConfirmation(levelId, id, undoStack.length);
+      if (confirmation) {
+        showLevelChangeConfirmation(id, confirmation);
+        return;
+      }
+    }
     levelId = id;
     board = loadBoard(def);
     undoStack = [];
@@ -420,6 +432,10 @@ export function mountApp(root: HTMLElement): void {
     freeHintsLeft = 1;
     shakeKey = null;
     setScreen('play');
+  }
+
+  function focusPlayControls(): void {
+    el.play.querySelector<HTMLElement>('.accessible-board > summary')?.focus();
   }
 
   function renderPlayShell(): void {
@@ -760,6 +776,40 @@ export function mountApp(root: HTMLElement): void {
     restartButton?.focus();
   }
 
+  function showLevelChangeConfirmation(nextLevelId: number, message: string): void {
+    el.overlay.className = 'overlay open';
+    el.overlay.innerHTML = '';
+    const modal = div('modal level-change-modal');
+    const title = document.createElement('h2');
+    title.id = 'level-change-title';
+    title.textContent = 'Change level?';
+    const description = document.createElement('p');
+    description.id = 'level-change-description';
+    description.textContent = message;
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', title.id);
+    modal.setAttribute('aria-describedby', description.id);
+    modal.append(
+      title,
+      description,
+      button('Keep playing', 'btn secondary block', () => {
+        el.overlay.className = 'overlay';
+        el.overlay.innerHTML = '';
+        setScreen('play');
+        focusPlayControls();
+      }),
+      button('Change level', 'btn danger block', () => {
+        el.overlay.className = 'overlay';
+        el.overlay.innerHTML = '';
+        startLevel(nextLevelId, true);
+        focusPlayControls();
+      }),
+    );
+    el.overlay.append(modal);
+    focusDialog(modal);
+  }
+
   function showRestartConfirmation(message: string): void {
     el.overlay.className = 'overlay open';
     el.overlay.innerHTML = '';
@@ -781,8 +831,8 @@ export function mountApp(root: HTMLElement): void {
       button('Restart level', 'btn danger block', () => {
         el.overlay.className = 'overlay';
         el.overlay.innerHTML = '';
-        startLevel(levelId);
-        el.play.querySelector<HTMLElement>('.accessible-board > summary')?.focus();
+        startLevel(levelId, true);
+        focusPlayControls();
       }),
     );
     el.overlay.append(modal);
