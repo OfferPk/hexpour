@@ -106,7 +106,7 @@ describe('full 40-level pack', () => {
   it('proves the exact shortest solution depth for all 40 levels within the audit bound', () => {
     const expectedDepths = [
       1, 2, 3, 4, 5, 6, 7, 6, 2, 9, 3, 8, 4, 5, 4, 3, 6, 4, 4, 4,
-      6, 2, 2, 2, 3, 4, 2, 2, 3, 4, 2, 2, 2, 3, 2, 2, 3, 6, 2, 2,
+      6, 2, 2, 2, 3, 4, 2, 3, 3, 4, 2, 2, 3, 3, 2, 2, 3, 6, 2, 2,
     ];
     const audits = LEVELS.map((level) =>
       auditMinimumPours(level, { maxStates: 2_000_000, maxMilliseconds: 60_000 }),
@@ -131,13 +131,13 @@ describe('full 40-level pack', () => {
   });
 
   it('keeps the late-game retunes at their exact engine-based shortest depths', () => {
-    const retunedLevels = [9, 22, 23, 24, 29, 32, 34, 35, 37, 39];
+    const retunedLevels = [9, 22, 23, 24, 28, 29, 32, 33, 34, 35, 37, 39];
     const shortestSolutions = retunedLevels.map((id) => {
       const level = getLevel(id);
       if (!level) throw new Error(`Missing level ${id}`);
       return minimumWinningPours(loadBoard(level));
     });
-    expect(shortestSolutions).toEqual([2, 2, 2, 2, 3, 2, 3, 2, 3, 2]);
+    expect(shortestSolutions).toEqual([2, 2, 2, 2, 3, 3, 2, 3, 3, 2, 3, 2]);
   });
 
   it('preserves each retuned level color inventory', () => {
@@ -146,8 +146,10 @@ describe('full 40-level pack', () => {
       22: { R: 16, G: 12, B: 12, Y: 12 },
       23: { R: 16, G: 12, B: 12, Y: 12 },
       24: { R: 16, G: 12, B: 12, Y: 12 },
+      28: { R: 16, G: 12, B: 12, Y: 12 },
       29: { R: 16, G: 12, B: 12, Y: 12 },
       32: { R: 16, G: 16, B: 12, Y: 12 },
+      33: { R: 16, G: 16, B: 12, Y: 12 },
       34: { R: 12, G: 12, B: 12, Y: 12, P: 8 },
       35: { R: 12, G: 12, B: 12, Y: 12, P: 8 },
       37: { R: 12, G: 8, B: 8, Y: 8, P: 8, O: 8 },
