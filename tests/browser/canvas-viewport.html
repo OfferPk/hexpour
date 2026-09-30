@@ -3,20 +3,19 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>HexPour narrow-landscape canvas regression</title>
+    <title>HexPour local browser viewport regression</title>
     <style>
       html,
       body {
+        width: 100%;
+        height: 100%;
         margin: 0;
-        min-height: 100%;
         overflow: hidden;
         background: #111;
       }
 
       #game {
         display: block;
-        width: 667px;
-        height: 375px;
         border: 0;
       }
 
@@ -28,15 +27,49 @@
     </style>
   </head>
   <body>
-    <iframe id="game" title="HexPour 667 by 375 landscape test" src="/hexpour/"></iframe>
+    <iframe id="game" title="HexPour local viewport test"></iframe>
     <pre id="test-result" data-status="running">pending</pre>
     <script>
       (() => {
         const frame = document.querySelector('#game');
         const result = document.querySelector('#test-result');
+        const params = new URLSearchParams(location.search);
+        const width = Number(params.get('width'));
+        const height = Number(params.get('height'));
+        const runInteractions = params.get('interactions') === '1';
         const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-        async function waitFor(predicate, label, timeoutMs = 6000) {
+        function report(status, value) {
+          result.dataset.status = status;
+          result.textContent = JSON.stringify(value);
+        }
+
+        try {
+          if (location.hostname !== '127.0.0.1') {
+            throw new Error('This browser fixture is loopback-only');
+          }
+          if (!Number.isInteger(width) || width < 280 || width > 1200 ||
+              !Number.isInteger(height) || height < 280 || height > 1200) {
+            throw new Error('Invalid test viewport dimensions');
+          }
+
+          // Seed only this temporary same-origin Chromium profile; never touch a player save.
+          localStorage.setItem(
+            'hexpour_v1',
+            JSON.stringify({ unlocked: 2, adsRemoved: false, mute: false }),
+          );
+          localStorage.setItem('hexpour:howto', '1');
+          sessionStorage.setItem('hexpour:a2hs', '1');
+          frame.style.width = `${width}px`;
+          frame.style.height = `${height}px`;
+          frame.title = `HexPour ${width} by ${height} local viewport test`;
+          frame.src = '/hexpour/';
+        } catch (error) {
+          report('fail', { message: error?.message || String(error) });
+          return;
+        }
+
+        async function waitFor(predicate, label, timeoutMs = 7000) {
           const deadline = Date.now() + timeoutMs;
           while (Date.now() < deadline) {
             const value = predicate();
@@ -46,13 +79,37 @@
           throw new Error(`Timed out waiting for ${label}`);
         }
 
-        function report(status, value) {
-          result.dataset.status = status;
-          result.textContent = JSON.stringify(value);
+        function assertVisibleInViewport(element, label, gameWindow) {
+          if (!element) throw new Error(`${label} is missing`);
+          const rect = element.getBoundingClientRect();
+          if (rect.width <= 0 || rect.height <= 0 || rect.left < -1 || rect.top < -1 ||
+              rect.right > gameWindow.innerWidth + 1 || rect.bottom > gameWindow.innerHeight + 1) {
+            throw new Error(
+              `${label} is outside the ${gameWindow.innerWidth}x${gameWindow.innerHeight} viewport`,
+            );
+          }
+          return {
+            left: Math.round(rect.left),
+            top: Math.round(rect.top),
+            width: Math.round(rect.width),
+            height: Math.round(rect.height),
+          };
         }
 
-        function captureCanvas(windowRef, documentRef, phase) {
-          const wrapper = documentRef.querySelector('.play-canvas-wrap');
+        function canvasFingerprint(context, canvas) {
+          const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+          let hash = 2166136261;
+          for (let i = 0; i < pixels.length; i += 4) {
+            hash = Math.imul(hash ^ pixels[i], 16777619);
+            hash = Math.imul(hash ^ pixels[i + 1], 16777619);
+            hash = Math.imul(hash ^ pixels[i + 2], 16777619);
+            hash = Math.imul(hash ^ pixels[i + 3], 16777619);
+          }
+          return (hash >>> 0).toString(16);
+        }
+
+        function captureCanvas(gameWindow, gameDocument, phase) {
+          const wrapper = gameDocument.querySelector('.play-canvas-wrap');
           const canvas = wrapper?.querySelector('canvas');
           const context = canvas?.getContext('2d');
           if (!wrapper || !canvas || !context) {
@@ -61,11 +118,16 @@
 
           const cssWidth = wrapper.clientWidth;
           const cssHeight = wrapper.clientHeight;
-          const scale = Math.min(windowRef.devicePixelRatio || 1, 2);
+          const scale = Math.min(gameWindow.devicePixelRatio || 1, 2);
           const expectedWidth = Math.floor(cssWidth * scale);
           const expectedHeight = Math.floor(cssHeight * scale);
+          const rect = wrapper.getBoundingClientRect();
           if (cssWidth < 1 || cssHeight < 1 || expectedWidth < 1 || expectedHeight < 1) {
             throw new Error(`${phase}: canvas viewport collapsed to zero size`);
+          }
+          if (rect.left < -1 || rect.top < -1 ||
+              rect.right > gameWindow.innerWidth + 1 || rect.bottom > gameWindow.innerHeight + 1) {
+            throw new Error(`${phase}: the canvas wrapper is clipped by the game viewport`);
           }
           if (canvas.width !== expectedWidth || canvas.height !== expectedHeight) {
             throw new Error(
@@ -94,6 +156,117 @@
           };
         }
 
+        async function pauseForKeyboard(stage) {
+          result.dataset.status = `awaiting:${stage}`;
+          await waitFor(
+            () => result.dataset.resume === stage,
+            `the real ${stage} keyboard event`,
+            9000,
+          );
+          delete result.dataset.resume;
+          result.dataset.status = 'running';
+        }
+
+        async function testKeyboardUndoAndHint(gameWindow, gameDocument, details, summary, controls, canvas, context, pendingFrames) {
+          const cellAt = (q, r) => controls.find((button) =>
+            button.getAttribute('aria-label')?.startsWith(`Hex cell q ${q}, r ${r}:`),
+          );
+          const source = cellAt(0, 0);
+          const middle = cellAt(1, 0);
+          const destination = cellAt(0, 1);
+          if (!source || !middle || !destination) {
+            throw new Error('Level 2 keyboard fixture cells are missing');
+          }
+          const originalSourceLabel = source.getAttribute('aria-label');
+          const originalDestinationLabel = destination.getAttribute('aria-label');
+          if (!originalSourceLabel?.includes('red, green, green') ||
+              !originalDestinationLabel?.includes('empty')) {
+            throw new Error('Level 2 did not load the expected disposable board state');
+          }
+
+          summary.focus();
+          await waitFor(() => gameDocument.activeElement === summary, 'keyboard focus on the disclosure');
+          await pauseForKeyboard('tab-source');
+          if (gameDocument.activeElement !== source) {
+            throw new Error('Tab did not move focus from the disclosure to the first cell');
+          }
+
+          await pauseForKeyboard('enter-source');
+          await waitFor(() => source.getAttribute('aria-pressed') === 'true', 'keyboard source selection');
+          if (!source.classList.contains('selected')) {
+            throw new Error('Keyboard source selection is missing its visible selected state');
+          }
+
+          await pauseForKeyboard('tab-middle');
+          if (gameDocument.activeElement !== middle) {
+            throw new Error('Tab did not move to the second accessible cell');
+          }
+          await pauseForKeyboard('tab-destination');
+          if (gameDocument.activeElement !== destination) {
+            throw new Error('Tab did not move to the adjacent empty destination');
+          }
+
+          await pauseForKeyboard('enter-destination');
+          const moveStatus = gameDocument.querySelector('.move-status');
+          await waitFor(() => moveStatus?.textContent === 'Pours: 1', 'the first legal keyboard pour');
+          const poursAfterMove = moveStatus.textContent;
+          if (gameDocument.querySelector('.screen.win.active')) {
+            throw new Error('The two-pour Level 2 puzzle unexpectedly completed after one pour');
+          }
+          if (source.getAttribute('aria-label')?.includes('red.') !== true ||
+              !destination.getAttribute('aria-label')?.includes('green, green')) {
+            throw new Error('Keyboard destination did not receive the source color run');
+          }
+
+          const undo = Array.from(gameDocument.querySelectorAll('.toolbar button')).find(
+            (button) => button.textContent.trim() === 'Undo',
+          );
+          const hint = Array.from(gameDocument.querySelectorAll('.toolbar button')).find(
+            (button) => button.textContent.trim() === 'Hint',
+          );
+          if (!undo || !hint) throw new Error('Undo or Hint control is missing');
+
+          undo.focus();
+          await pauseForKeyboard('enter-undo');
+          await waitFor(
+            () => moveStatus?.textContent === 'Pours: 0' &&
+              source.getAttribute('aria-label') === originalSourceLabel &&
+              destination.getAttribute('aria-label') === originalDestinationLabel,
+            'Undo to restore the exact Level 2 board',
+          );
+          const poursAfterUndo = moveStatus.textContent;
+
+          const flushFrame = () => {
+            const callback = pendingFrames.shift();
+            if (!callback) throw new Error('No intercepted animation frame was available to redraw Hint');
+            callback(gameWindow.performance.now());
+          };
+          flushFrame();
+          const beforeHint = canvasFingerprint(context, canvas);
+          hint.focus();
+          await pauseForKeyboard('enter-hint');
+          const toast = gameDocument.querySelector('[role="status"]');
+          await waitFor(
+            () => toast?.textContent === 'Hint highlighted' && toast.classList.contains('show'),
+            'accessible Hint feedback',
+          );
+          flushFrame();
+          const afterHint = canvasFingerprint(context, canvas);
+          if (beforeHint === afterHint) {
+            throw new Error('Hint feedback did not change the rendered canvas highlight');
+          }
+
+          return {
+            keyboardTabEnterSource: 'passed',
+            keyboardTabEnterAdjacentDestination: 'passed',
+            poursAfterMove,
+            poursAfterUndo,
+            keyboardUndoRestoredBoard: poursAfterUndo === 'Pours: 0',
+            keyboardHintStatus: toast.textContent,
+            hintChangedCanvas: true,
+          };
+        }
+
         async function run() {
           await waitFor(
             () => frame.contentWindow && frame.contentDocument?.title === 'HexPour' &&
@@ -104,28 +277,31 @@
           );
           const gameWindow = frame.contentWindow;
           const gameDocument = frame.contentDocument;
-          if (gameWindow.innerWidth !== 667 || gameWindow.innerHeight !== 375) {
+          if (window.innerWidth !== width || window.innerHeight !== height ||
+              gameWindow.innerWidth !== width || gameWindow.innerHeight !== height) {
             throw new Error(
-              `Expected a 667x375 game viewport, got ${gameWindow.innerWidth}x${gameWindow.innerHeight}`,
+              `Expected ${width}x${height}, got parent ${window.innerWidth}x${window.innerHeight} ` +
+              `and game ${gameWindow.innerWidth}x${gameWindow.innerHeight}`,
             );
           }
 
-          // Dismiss only standard first-run dialogs in this disposable browser profile.
+          // Dismiss only standard first-run prompts in this disposable browser profile.
           for (let attempt = 0; attempt < 3; attempt += 1) {
             const gotIt = Array.from(gameDocument.querySelectorAll('button')).find(
               (button) => button.textContent.trim() === 'Got it',
             );
             if (!gotIt) break;
             gotIt.click();
-            await wait(100);
+            await wait(80);
           }
 
-          // Keep the resize/redraw assertion deterministic: after Play, the production
-          // canvas resize observer must redraw synchronously rather than rely on a later frame.
+          // Hold frames for deterministic resize and Hint redraw assertions.
+          const pendingFrames = [];
           let interceptedAnimationFrames = 0;
-          gameWindow.requestAnimationFrame = () => {
+          gameWindow.requestAnimationFrame = (callback) => {
+            pendingFrames.push(callback);
             interceptedAnimationFrames += 1;
-            return 0;
+            return interceptedAnimationFrames;
           };
           const play = Array.from(gameDocument.querySelectorAll('button')).find(
             (button) => button.textContent.trim() === 'Play',
@@ -135,18 +311,23 @@
 
           await waitFor(
             () => gameDocument.querySelector('details.accessible-board') &&
-              gameDocument.querySelector('.play-canvas-wrap canvas'),
-            'the Level 1 canvas and accessible controls',
+              gameDocument.querySelector('.play-canvas-wrap canvas') &&
+              gameDocument.querySelector('.topbar .title')?.textContent.trim() === 'Level 2',
+            'Level 2 canvas and accessible controls',
           );
           const details = gameDocument.querySelector('details.accessible-board');
           const summary = details.querySelector('summary');
           const wrapper = gameDocument.querySelector('.play-canvas-wrap');
           const canvas = wrapper.querySelector('canvas');
+          const context = canvas.getContext('2d');
+          const toolbar = gameDocument.querySelector('.toolbar');
           if (!summary) throw new Error('Accessible-controls disclosure summary is missing');
           const cellControls = Array.from(details.querySelectorAll('button.cell-control'));
-          if (cellControls.length === 0 || cellControls.some((button) => !button.getAttribute('aria-label'))) {
-            throw new Error('The accessible panel is missing labeled cell controls');
+          if (cellControls.length !== 3 || cellControls.some((button) => !button.getAttribute('aria-label'))) {
+            throw new Error('Level 2 must expose three labeled accessible cell controls');
           }
+          const initialToolbarBounds = assertVisibleInViewport(toolbar, 'The toolbar', gameWindow);
+          const initialSummaryBounds = assertVisibleInViewport(summary, 'The cell-controls summary', gameWindow);
 
           await wait(100);
           const collapsedBefore = captureCanvas(gameWindow, gameDocument, 'collapsed-before');
@@ -158,8 +339,23 @@
               ),
             'the expanded-panel canvas resize',
           );
-          await wait(100);
+          const expandedSummaryBounds = assertVisibleInViewport(summary, 'The expanded cell-controls summary', gameWindow);
+          await wait(80);
           const expanded = captureCanvas(gameWindow, gameDocument, 'expanded');
+
+          let interactions = null;
+          if (runInteractions) {
+            interactions = await testKeyboardUndoAndHint(
+              gameWindow,
+              gameDocument,
+              details,
+              summary,
+              cellControls,
+              canvas,
+              context,
+              pendingFrames,
+            );
+          }
 
           summary.click();
           await waitFor(
@@ -169,7 +365,7 @@
               ),
             'the collapsed-panel canvas resize',
           );
-          await wait(100);
+          await wait(80);
           const collapsedAfter = captureCanvas(gameWindow, gameDocument, 'collapsed-after');
 
           if (expanded.wrapper.height >= collapsedBefore.wrapper.height) {
@@ -183,29 +379,37 @@
           }
 
           report('pass', {
-            viewport: `${gameWindow.innerWidth}x${gameWindow.innerHeight}`,
+            viewport: `${width}x${height}`,
+            level: 'Level 2',
             requestAnimationFramesIntercepted: interceptedAnimationFrames,
             accessibleCellControls: cellControls.length,
+            toolbarBounds: initialToolbarBounds,
+            disclosureBounds: { collapsed: initialSummaryBounds, expanded: expandedSummaryBounds },
             redrawVerifiedByPaintedPixels: true,
+            interactions,
             stages: [collapsedBefore, expanded, collapsedAfter],
           });
         }
 
         run().catch((error) => {
+          let child = {};
+          try {
+            const documentRef = frame.contentDocument;
+            child = {
+              url: frame.contentWindow?.location?.href || '',
+              title: documentRef?.title || '',
+              buttons: Array.from(documentRef?.querySelectorAll('button') || [])
+                .map((button) => button.textContent.trim())
+                .slice(0, 20),
+              text: documentRef?.body?.innerText?.slice(0, 500) || '',
+            };
+          } catch {
+            child = { inaccessible: true };
+          }
           report('fail', {
             message: error?.message || String(error),
             stack: String(error?.stack || ''),
-            child: (() => {
-              const documentRef = frame.contentDocument;
-              return {
-                url: frame.contentWindow?.location?.href || '',
-                title: documentRef?.title || '',
-                buttons: Array.from(documentRef?.querySelectorAll('button') || [])
-                  .map((button) => button.textContent.trim())
-                  .slice(0, 20),
-                text: documentRef?.body?.innerText?.slice(0, 500) || '',
-              };
-            })(),
+            child,
           });
         });
       })();

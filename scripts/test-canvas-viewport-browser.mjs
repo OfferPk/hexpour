@@ -19,6 +19,24 @@ if (!chromiumPath) {
   );
 }
 
+const viewports = [
+  { name: 'compact portrait', width: 320, height: 568, interactions: true },
+  { name: 'portrait', width: 360, height: 640 },
+  { name: 'tall portrait', width: 390, height: 844 },
+  { name: 'narrow landscape', width: 667, height: 375 },
+  { name: 'wide landscape', width: 844, height: 390 },
+];
+
+const keyByStage = {
+  'tab-source': 'Tab',
+  'enter-source': 'Enter',
+  'tab-middle': 'Tab',
+  'tab-destination': 'Tab',
+  'enter-destination': 'Enter',
+  'enter-undo': 'Enter',
+  'enter-hint': 'Enter',
+};
+
 const profileDirectory = await mkdtemp(join(tmpdir(), 'hexpour-viewport-chromium-'));
 let server;
 let browser;
@@ -43,9 +61,9 @@ try {
   if (!address || typeof address === 'string') {
     throw new Error('Vite did not provide a local TCP address for the browser test.');
   }
-  const testUrl = `http://127.0.0.1:${address.port}/hexpour/tests/browser/canvas-viewport.html`;
+  const fixtureUrl = `http://127.0.0.1:${address.port}/hexpour/tests/browser/canvas-viewport.html`;
 
-  console.log(`Running 667x375 canvas resize smoke test with ${chromiumPath}`);
+  console.log(`Running local viewport and keyboard regressions with ${chromiumPath}`);
   browser = spawn(chromiumPath, [
     '--headless',
     '--no-sandbox',
@@ -142,35 +160,104 @@ try {
     socket.send(JSON.stringify({ id, method, params }));
   });
 
+  async function pressKey(key) {
+    const virtualKey = key === 'Tab' ? 9 : 13;
+    const keyParams = {
+      key,
+      code: key,
+      windowsVirtualKeyCode: virtualKey,
+      nativeVirtualKeyCode: virtualKey,
+    };
+    await command('Input.dispatchKeyEvent', { type: 'keyDown', ...keyParams });
+    if (key === 'Enter') {
+      await command('Input.dispatchKeyEvent', {
+        type: 'char',
+        ...keyParams,
+        text: '\r',
+        unmodifiedText: '\r',
+      });
+    }
+    await command('Input.dispatchKeyEvent', { type: 'keyUp', ...keyParams });
+  }
+
+  async function runViewport(viewport) {
+    await command('Emulation.setDeviceMetricsOverride', {
+      width: viewport.width,
+      height: viewport.height,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+    const query = new URLSearchParams({
+      width: String(viewport.width),
+      height: String(viewport.height),
+      interactions: viewport.interactions ? '1' : '0',
+    });
+    await command('Page.navigate', { url: `${fixtureUrl}?${query}` });
+
+    const handledStages = new Set();
+    const testDeadline = Date.now() + 30_000;
+    let testResult;
+    while (Date.now() < testDeadline) {
+      const evaluation = await command('Runtime.evaluate', {
+        expression: `(() => {
+          const node = document.getElementById('test-result');
+          return node ? { status: node.dataset.status, detail: node.textContent } : null;
+        })()`,
+        returnByValue: true,
+      });
+      testResult = evaluation.result?.value;
+      const status = testResult?.status || '';
+
+      if (status.startsWith('awaiting:')) {
+        const stage = status.slice('awaiting:'.length);
+        if (!Object.hasOwn(keyByStage, stage)) {
+          throw new Error(`Unknown keyboard test stage: ${stage}`);
+        }
+        if (!handledStages.has(stage)) {
+          await pressKey(keyByStage[stage]);
+          await command('Runtime.evaluate', {
+            expression: `(() => {
+              const node = document.getElementById('test-result');
+              if (!node) throw new Error('The browser fixture result node disappeared');
+              node.dataset.resume = ${JSON.stringify(stage)};
+              return true;
+            })()`,
+            returnByValue: true,
+          });
+          handledStages.add(stage);
+        }
+      }
+
+      if (status === 'pass' || status === 'fail') break;
+      if (browser.exitCode !== null) {
+        throw new Error(`Chromium exited during the ${viewport.name} test.`);
+      }
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 60));
+    }
+
+    if (!testResult || testResult.status === 'running' || testResult.status.startsWith('awaiting:')) {
+      throw new Error(`The ${viewport.name} browser test did not finish within 30 seconds.`);
+    }
+    if (testResult.status !== 'pass') {
+      throw new Error(`${viewport.name} browser regression failed: ${testResult.detail || 'no failure details'}`);
+    }
+
+    let detail;
+    try {
+      detail = JSON.parse(testResult.detail);
+    } catch {
+      throw new Error(`${viewport.name} test returned invalid result JSON.`);
+    }
+    console.log(`PASS ${viewport.name} ${viewport.width}x${viewport.height}`);
+    console.log(JSON.stringify(detail));
+  }
+
   await command('Page.enable');
   await command('Runtime.enable');
-  await command('Page.navigate', { url: testUrl });
-
-  const testDeadline = Date.now() + 20_000;
-  let testResult;
-  while (Date.now() < testDeadline) {
-    const evaluation = await command('Runtime.evaluate', {
-      expression: `(() => {
-        const node = document.getElementById('test-result');
-        return node ? { status: node.dataset.status, detail: node.textContent } : null;
-      })()`,
-      returnByValue: true,
-    });
-    testResult = evaluation.result?.value;
-    if (testResult?.status === 'pass' || testResult?.status === 'fail') break;
-    if (browser.exitCode !== null) throw new Error('Chromium exited during the browser test.');
-    await new Promise((resolveDelay) => setTimeout(resolveDelay, 100));
+  for (const viewport of viewports) {
+    await runViewport(viewport);
   }
-
-  if (!testResult || testResult.status === 'running') {
-    throw new Error('The browser fixture did not finish within 20 seconds.');
-  }
-  if (testResult.status !== 'pass') {
-    throw new Error(`Browser regression failed: ${testResult.detail || 'no failure details'}`);
-  }
-
-  console.log('PASS: narrow-landscape panel open/close resizes and redraws the canvas.');
-  console.log(testResult.detail);
+  await command('Emulation.clearDeviceMetricsOverride');
 } catch (error) {
   console.error(error?.stack || String(error));
   process.exitCode = 1;

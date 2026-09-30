@@ -77,7 +77,7 @@ npm run test:browser:viewport
 
 Covers hex neighbors, legal/illegal pours, win detection, ad stubs, descriptive cell labels, validation of all 40 level definitions and opening moves, and exact shortest-solution lengths for all 40 levels. `npm run audit:levels` prints the complete 1–40 depth profile; each level has a 2,000,000-state and 60-second bound, and a bounded search is reported as incomplete rather than unsolvable.
 
-`npm run test:browser:viewport` starts a loopback-only Vite server and runs system Chromium headlessly using Node 22+’s built-in WebSocket API, without adding browser packages. It opens the game at 667×375, suppresses the animation loop, toggles the keyboard/screen-reader cell panel, and checks that the canvas backing store resizes and the board is redrawn after both changes. Set `CHROMIUM_BIN` if Chromium is not at a detected system path. This is a local command; the repository has no configured CI workflow.
+`npm run test:browser:viewport` starts a loopback-only Vite server and runs system Chromium headlessly using Node 22+’s built-in WebSocket API, without adding browser packages. It checks canvas resize/redraw at 320×568, 360×640, 390×844, 667×375, and 844×390. In the disposable browser profile, it also uses real Tab/Enter key events on Level 2 to select a source and destination, then checks Undo restores the board and Hint produces accessible feedback plus a visible canvas highlight. The fixture is under `tests/`, seeds only the throwaway Chromium profile, and is not included in the production build. Set `CHROMIUM_BIN` if Chromium is not at a detected system path. This is a local command; the repository has no configured CI workflow.
 
 ## License
 
