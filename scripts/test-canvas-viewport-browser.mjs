@@ -33,6 +33,8 @@ const keyByStage = {
   'tab-middle': 'Tab',
   'tab-destination': 'Tab',
   'enter-destination': 'Enter',
+  'enter-next-source': 'Enter',
+  'enter-deselect-source': 'Enter',
   'enter-undo': 'Enter',
   'enter-hint': 'Enter',
 };

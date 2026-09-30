@@ -169,6 +169,7 @@
 
         async function testKeyboardUndoAndHint(gameWindow, gameDocument, details, summary, controls, canvas, context, pendingFrames) {
           const moveStatus = gameDocument.querySelector('.move-status');
+          const selectionStatus = gameDocument.querySelector('.screen-reader-status');
           const undo = Array.from(gameDocument.querySelectorAll('.toolbar button')).find(
             (button) => button.textContent.trim() === 'Undo',
           );
@@ -180,6 +181,12 @@
           const destination = cellAt(0, 1);
           if (!source || !middle || !destination) {
             throw new Error('Level 2 keyboard fixture cells are missing');
+          }
+          if (!selectionStatus || selectionStatus.getAttribute('role') !== 'status' ||
+              selectionStatus.getAttribute('aria-live') !== 'polite' ||
+              selectionStatus.getAttribute('aria-atomic') !== 'true' ||
+              selectionStatus.textContent !== '') {
+            throw new Error('Source-selection feedback is not a quiet polite live region initially');
           }
           const originalSourceLabel = source.getAttribute('aria-label');
           const originalDestinationLabel = destination.getAttribute('aria-label');
@@ -204,9 +211,23 @@
           }
 
           await pauseForKeyboard('enter-source');
-          await waitFor(() => source.getAttribute('aria-pressed') === 'true', 'keyboard source selection');
+          await waitFor(
+            () => source.getAttribute('aria-pressed') === 'true' &&
+              selectionStatus.textContent ===
+                'Selected source: Hex cell q 0, r 0. Available legal destination: Hex cell q 0, r 1.',
+            'keyboard source selection and its legal destination announcement',
+          );
           if (!source.classList.contains('selected')) {
             throw new Error('Keyboard source selection is missing its visible selected state');
+          }
+          const selectionAnnouncementBeforeFrame = selectionStatus.textContent;
+          const selectionFrame = pendingFrames.shift();
+          if (!selectionFrame) {
+            throw new Error('No intercepted animation frame was available to verify quiet live-region behavior');
+          }
+          selectionFrame(gameWindow.performance.now());
+          if (selectionStatus.textContent !== selectionAnnouncementBeforeFrame) {
+            throw new Error('The source-selection live region changed during an animation frame');
           }
 
           await pauseForKeyboard('tab-middle');
@@ -219,7 +240,10 @@
           }
 
           await pauseForKeyboard('enter-destination');
-          await waitFor(() => moveStatus?.textContent === 'Pours: 1', 'the first legal keyboard pour');
+          await waitFor(
+            () => moveStatus?.textContent === 'Pours: 1' && selectionStatus.textContent === '',
+            'the first legal keyboard pour and cleared source selection',
+          );
           if (undo.disabled || undo.getAttribute('aria-label') !== 'Undo last pour.') {
             throw new Error('Undo did not become enabled and accessible after a pour');
           }
@@ -231,6 +255,22 @@
               !destination.getAttribute('aria-label')?.includes('green, green')) {
             throw new Error('Keyboard destination did not receive the source color run');
           }
+
+          source.focus();
+          await waitFor(() => gameDocument.activeElement === source, 'keyboard focus back on the source');
+          await pauseForKeyboard('enter-next-source');
+          const updatedDestinationAnnouncement =
+            'Selected source: Hex cell q 0, r 0. Available legal destination: Hex cell q 1, r 0.';
+          await waitFor(
+            () => source.getAttribute('aria-pressed') === 'true' &&
+              selectionStatus.textContent === updatedDestinationAnnouncement,
+            'the changed legal destination after the board state changes',
+          );
+          await pauseForKeyboard('enter-deselect-source');
+          await waitFor(
+            () => source.getAttribute('aria-pressed') === 'false' && selectionStatus.textContent === '',
+            'keyboard source deselection without stale destination feedback',
+          );
 
           const hint = Array.from(gameDocument.querySelectorAll('.toolbar button')).find(
             (button) => button.getAttribute('aria-label') === 'Hint. One free hint remaining.',
@@ -267,7 +307,7 @@
           const beforeHint = canvasFingerprint(context, canvas);
           hint.focus();
           await pauseForKeyboard('enter-hint');
-          const toast = gameDocument.querySelector('[role="status"]');
+          const toast = gameDocument.querySelector('.toast[role="status"]');
           await waitFor(
             () => toast?.textContent === 'Hint highlighted' && toast.classList.contains('show'),
             'accessible Hint feedback',
@@ -288,6 +328,11 @@
           return {
             keyboardTabEnterSource: 'passed',
             keyboardTabEnterAdjacentDestination: 'passed',
+            selectedSourceAnnouncement: 'Selected source q 0, r 0',
+            firstLegalDestination: 'q 0, r 1',
+            updatedLegalDestination: 'q 1, r 0',
+            animationFramePreservesSelectionAnnouncement: true,
+            keyboardSourceDeselectionClearsAnnouncement: true,
             poursAfterMove,
             poursAfterUndo,
             undoDisabledBeforePour: true,

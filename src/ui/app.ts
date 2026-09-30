@@ -6,6 +6,7 @@ import {
   cloneBoard,
   hintPour,
   isWon,
+  listLegalPours,
   loadBoard,
   tryPour,
 } from '../game/engine';
@@ -57,6 +58,7 @@ export function mountApp(root: HTMLElement): void {
   let raf = 0;
   let cleanupPlay: (() => void) | null = null;
   let moveStatus: HTMLDivElement | null = null;
+  let selectionStatus: HTMLDivElement | null = null;
   let cellButtons = new Map<string, HTMLButtonElement>();
   let undoButton: HTMLButtonElement | null = null;
   let hintButton: HTMLButtonElement | null = null;
@@ -416,6 +418,7 @@ export function mountApp(root: HTMLElement): void {
     cleanupPlay?.();
     cleanupPlay = null;
     undoButton = null;
+    selectionStatus = null;
     if (!board) return;
     el.play.innerHTML = '';
     const top = div('topbar');
@@ -432,6 +435,11 @@ export function mountApp(root: HTMLElement): void {
     moveStatus.setAttribute('aria-live', 'polite');
     moveStatus.setAttribute('aria-atomic', 'true');
     updateMoveStatus();
+
+    selectionStatus = div('screen-reader-status');
+    selectionStatus.setAttribute('role', 'status');
+    selectionStatus.setAttribute('aria-live', 'polite');
+    selectionStatus.setAttribute('aria-atomic', 'true');
 
     const wrap = div('play-canvas-wrap');
     canvas = document.createElement('canvas');
@@ -472,7 +480,7 @@ export function mountApp(root: HTMLElement): void {
       grid.append(control);
     }
     controls.append(summary, instructions, grid);
-    el.play.append(top, moveStatus, wrap, tools, controls);
+    el.play.append(top, moveStatus, selectionStatus, wrap, tools, controls);
     refreshCellControls();
 
     const resize = createCanvasResizeHandler(
@@ -560,6 +568,35 @@ export function mountApp(root: HTMLElement): void {
       control.classList.toggle('selected', active);
       control.disabled = cell.blocked;
     }
+    updateSelectionStatus();
+  }
+
+  function updateSelectionStatus(): void {
+    if (!selectionStatus) return;
+    if (!board || !selected) {
+      selectionStatus.textContent = '';
+      return;
+    }
+
+    const selectedSource = selected;
+    const source = board.cells.get(`${selectedSource.q},${selectedSource.r}`);
+    if (!source || source.blocked || source.stack.length === 0) {
+      selectionStatus.textContent = '';
+      return;
+    }
+
+    const destinations = listLegalPours(board)
+      .filter(({ from }) => from.q === selectedSource.q && from.r === selectedSource.r)
+      .map(({ to }) => `Hex cell q ${to.q}, r ${to.r}`);
+    const listedDestinations = destinations.length < 2
+      ? destinations[0] ?? ''
+      : `${destinations.slice(0, -1).join(', ')}, and ${destinations[destinations.length - 1]}`;
+    const destinationMessage = destinations.length === 0
+      ? 'No legal adjacent destinations.'
+      : `Available legal destination${destinations.length === 1 ? '' : 's'}: ${listedDestinations}.`;
+
+    selectionStatus.textContent =
+      `Selected source: Hex cell q ${source.q}, r ${source.r}. ${destinationMessage}`;
   }
 
   function updateMoveStatus(): void {
