@@ -1171,6 +1171,7 @@ export function mountApp(root: HTMLElement): void {
     const confirmation = getRestartConfirmation(levelId, undoStack.length);
     if (!confirmation) {
       startLevel(levelId);
+      if (screen === 'play') focusPlayControls();
       return;
     }
     showRestartConfirmation(confirmation);
