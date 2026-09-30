@@ -642,7 +642,7 @@ export function mountApp(root: HTMLElement): void {
     }
     selected = null;
     hint = null;
-    freeHintsLeft = 1;
+    freeHintsLeft = saved?.freeHintUsed ? 0 : 1;
     shakeKey = null;
     setScreen('play');
     if (announceRestore && saved) {
@@ -856,7 +856,7 @@ export function mountApp(root: HTMLElement): void {
       onWin();
     } else {
       const def = getLevel(levelId);
-      if (def) saveInProgress(def, board, undoStack);
+      if (def) saveInProgress(def, board, undoStack, Date.now(), freeHintsLeft === 0);
     }
   }
 
@@ -993,7 +993,7 @@ export function mountApp(root: HTMLElement): void {
       clearInProgress();
     } else {
       const def = getLevel(levelId);
-      if (def) saveInProgress(def, board, undoStack);
+      if (def) saveInProgress(def, board, undoStack, Date.now(), freeHintsLeft === 0);
     }
     let focusTarget: HTMLElement | null = null;
     if (previousFocus === undoButton && (undoButton === null || undoButton.disabled)) {
@@ -1028,6 +1028,10 @@ export function mountApp(root: HTMLElement): void {
     if (freeHintsLeft > 0) {
       freeHintsLeft--;
       refreshHintButton();
+      if (undoStack.length > 0) {
+        const def = getLevel(levelId);
+        if (def) saveInProgress(def, board, undoStack, Date.now(), freeHintsLeft === 0);
+      }
       applyHint();
       return;
     }

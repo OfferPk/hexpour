@@ -47,9 +47,21 @@ describe('in-progress puzzle persistence', () => {
 
     const restored = loadInProgress(level, now + 10_000);
     expect(restored).not.toBeNull();
-    expect(restored).toMatchObject({ levelId: level.id, moveCount: 1, savedAt: now });
+    expect(restored).toMatchObject({ levelId: level.id, moveCount: 1, freeHintUsed: false, savedAt: now });
     expect(restored?.board).toEqual(progress.board);
     expect(restored?.undoStack).toEqual(progress.undoStack);
+  });
+
+  it('persists a spent free Hint with the active run and defaults older snapshots to available', () => {
+    const progress = progressedBoard();
+    expect(saveInProgress(level, progress.board, progress.undoStack, now, true)).toBe(true);
+    const stored = JSON.parse(storage.get(KEY)!);
+    expect(stored.freeHintUsed).toBe(true);
+    expect(loadInProgress(level, now)?.freeHintUsed).toBe(true);
+
+    delete stored.freeHintUsed;
+    storage.set(KEY, JSON.stringify(stored));
+    expect(loadInProgress(level, now)?.freeHintUsed).toBe(false);
   });
 
   it('does not restore another level’s snapshot or delete it until a new run replaces it', () => {

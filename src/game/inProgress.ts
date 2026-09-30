@@ -13,6 +13,7 @@ export interface InProgressSnapshot {
   /** One pre-pour board for each undoable move; also supplies the displayed pour count. */
   undoStack: BoardState[];
   moveCount: number;
+  freeHintUsed: boolean;
   savedAt: number;
 }
 
@@ -33,6 +34,7 @@ interface SerializedSnapshot {
   levelId: number;
   savedAt: number;
   moveCount: number;
+  freeHintUsed: boolean;
   board: SerializedBoard;
   undoStack: SerializedBoard[];
 }
@@ -130,6 +132,7 @@ export function saveInProgress(
   board: BoardState,
   undoStack: BoardState[],
   now = Date.now(),
+  freeHintUsed = false,
 ): boolean {
   if (undoStack.length === 0 || isWon(board)) {
     clearInProgress();
@@ -141,6 +144,7 @@ export function saveInProgress(
     levelId: level.id,
     savedAt: now,
     moveCount: undoStack.length,
+    freeHintUsed,
     board: serializeBoard(board),
     undoStack: undoStack.map(serializeBoard),
   };
@@ -181,7 +185,8 @@ export function loadInProgress(level: LevelDef, now = Date.now()): InProgressSna
     return null;
   }
   if (!isRecord(parsed) || parsed.version !== VERSION || !Number.isSafeInteger(parsed.levelId) ||
-      !Number.isSafeInteger(parsed.savedAt) || !Number.isSafeInteger(parsed.moveCount)) {
+      !Number.isSafeInteger(parsed.savedAt) || !Number.isSafeInteger(parsed.moveCount) ||
+      (parsed.freeHintUsed !== undefined && typeof parsed.freeHintUsed !== 'boolean')) {
     clearInProgress();
     return null;
   }
@@ -213,5 +218,12 @@ export function loadInProgress(level: LevelDef, now = Date.now()): InProgressSna
     return null;
   }
 
-  return { levelId: level.id, board, undoStack, moveCount, savedAt };
+  return {
+    levelId: level.id,
+    board,
+    undoStack,
+    moveCount,
+    freeHintUsed: parsed.freeHintUsed === true,
+    savedAt,
+  };
 }

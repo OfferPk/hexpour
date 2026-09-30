@@ -290,6 +290,36 @@ try {
     hintText: afterMove.hintText,
   });
 
+  const storageBeforeReload = await evaluate(`(()=>Object.fromEntries(Array.from({length:localStorage.length},(_,i)=>{const key=localStorage.key(i);return [key,localStorage.getItem(key)]}).sort(([a],[b])=>a.localeCompare(b))))()`);
+  await command('Page.reload', { ignoreCache: true });
+  await waitFor(`document.readyState==='complete'&&!!document.querySelector('#home.screen.active .home-resume')`, 'the saved Level 39 run after a true document reload');
+  const storageAfterReload = await evaluate(`(()=>Object.fromEntries(Array.from({length:localStorage.length},(_,i)=>{const key=localStorage.key(i);return [key,localStorage.getItem(key)]}).sort(([a],[b])=>a.localeCompare(b))))()`);
+  check(JSON.stringify(storageAfterReload) === JSON.stringify(storageBeforeReload),
+    'A true reload leaves every localStorage key/value unchanged before resume', storageAfterReload);
+  await evaluate(`(()=>{const button=document.querySelector('#home.screen.active .home-resume');if(!button)return false;button.click();return true})()`);
+  await waitFor(`document.querySelector('#play.screen.active .topbar .title')?.textContent.trim()==='Level 39'&&document.querySelector('#play.screen.active .move-status')?.textContent.trim()==='Pours: 1'`, 'resumed Level 39 board and move count');
+  await waitFor(`document.activeElement===document.querySelector('#play.screen.active .accessible-board > summary')`, 'board-controls focus after saved-run resume');
+  const afterResume = await evaluate(stateExpression);
+  check(afterResume.hintText === 'Hint: ad' &&
+    afterResume.hintLabel === 'Hint. No free hints remain; opens the rewarded-ad prompt.',
+  'Resume keeps the spent free-Hint entitlement', {
+    text: afterResume.hintText,
+    label: afterResume.hintLabel,
+  });
+  check(JSON.stringify(afterResume.board) === JSON.stringify(afterMove.board) &&
+    afterResume.moveStatus === afterMove.moveStatus && afterResume.progress === afterMove.progress &&
+    afterResume.settings === afterMove.settings && afterResume.undoDisabled === afterMove.undoDisabled &&
+    afterResume.active.isSummary && afterResume.active.connected && !afterResume.active.disabled &&
+    JSON.stringify(await evaluate(`(()=>Object.fromEntries(Array.from({length:localStorage.length},(_,i)=>{const key=localStorage.key(i);return [key,localStorage.getItem(key)]}).sort(([a],[b])=>a.localeCompare(b))))()`)) === JSON.stringify(storageBeforeReload),
+  'Resume preserves the exact board, move count, saved Undo snapshot, settings, unlocks, localStorage, and sensible focus', {
+    boardUnchanged: JSON.stringify(afterResume.board) === JSON.stringify(afterMove.board),
+    moveStatus: afterResume.moveStatus,
+    progressUnchanged: afterResume.progress === afterMove.progress,
+    settingsUnchanged: afterResume.settings === afterMove.settings,
+    undoDisabled: afterResume.undoDisabled,
+    focus: afterResume.active,
+  });
+
   await tabUntil(`document.activeElement?.getAttribute('aria-label')==='Undo last pour.'`, 'enabled Undo', 50, true);
   await pressKey('Enter');
   await waitFor(`document.querySelector('#play.screen.active .move-status')?.textContent==='Pours: 0'`, 'Undo to restore the original Level 39 board');
