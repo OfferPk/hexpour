@@ -36,7 +36,7 @@ GitHub Pages path expects assets under `/hexpour/`.
 3. Target must be empty or share the same top color, and have free capacity (3–4).
 4. **Win:** every occupied cell’s stack is a single color. Empty cells are OK. Blocked (hole) cells never hold tokens.
 
-**Undo** is unlimited. **Hint** includes one free use per level; the play-screen button shows when that free use is spent and the next hint opens the rewarded-ad stub.
+**Undo** is unlimited and becomes available after your first pour. **Hint** includes one free use per level; the play-screen button shows when its free use is spent and the next hint opens the rewarded-ad stub.
 
 The play screen shows the pour count. Keyboard and screen-reader users can expand **Keyboard and screen reader controls**, then use Tab and Enter/Space to select a source and destination. Token letters and spoken color names supplement color alone.
 
@@ -77,7 +77,7 @@ npm run test:browser:viewport
 
 Covers hex neighbors, legal/illegal pours, win detection, ad stubs, descriptive cell labels, validation of all 40 level definitions and opening moves, and exact shortest-solution lengths for all 40 levels. `npm run audit:levels` prints the complete 1–40 depth profile; each level has a 2,000,000-state and 60-second bound, and a bounded search is reported as incomplete rather than unsolvable.
 
-`npm run test:browser:viewport` starts a loopback-only Vite server and runs system Chromium headlessly using Node 22+’s built-in WebSocket API, without adding browser packages. It checks canvas resize/redraw at 320×568, 360×640, 390×844, 667×375, and 844×390. In the disposable browser profile, it also uses real Tab/Enter key events on Level 2 to select a source and destination, checks the Hint button’s free-to-rewarded state and reset on Restart, verifies Undo restores the board, and confirms Hint produces accessible feedback plus a visible canvas highlight. The fixture is under `tests/`, seeds only the throwaway Chromium profile, and is not included in the production build. Set `CHROMIUM_BIN` if Chromium is not at a detected system path. This is a local command; the repository has no configured CI workflow.
+`npm run test:browser:viewport` starts a loopback-only Vite server and runs system Chromium headlessly using Node 22+’s built-in WebSocket API, without adding browser packages. It checks canvas resize/redraw at 320×568, 360×640, 390×844, 667×375, and 844×390. In the disposable browser profile, it also uses real Tab/Enter key events on Level 2 to select a source and destination, checks that Undo is natively disabled until a pour is made and disabled again after Undo or Restart, checks the Hint button’s free-to-rewarded state and reset on Restart, verifies Undo restores the board, and confirms Hint produces accessible feedback plus a visible canvas highlight. The fixture is under `tests/`, seeds only the throwaway Chromium profile, and is not included in the production build. Set `CHROMIUM_BIN` if Chromium is not at a detected system path. This is a local command; the repository has no configured CI workflow.
 
 ## License
 

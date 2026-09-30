@@ -168,6 +168,10 @@
         }
 
         async function testKeyboardUndoAndHint(gameWindow, gameDocument, details, summary, controls, canvas, context, pendingFrames) {
+          const moveStatus = gameDocument.querySelector('.move-status');
+          const undo = Array.from(gameDocument.querySelectorAll('.toolbar button')).find(
+            (button) => button.textContent.trim() === 'Undo',
+          );
           const cellAt = (q, r) => controls.find((button) =>
             button.getAttribute('aria-label')?.startsWith(`Hex cell q ${q}, r ${r}:`),
           );
@@ -182,6 +186,14 @@
           if (!originalSourceLabel?.includes('red, green, green') ||
               !originalDestinationLabel?.includes('empty')) {
             throw new Error('Level 2 did not load the expected disposable board state');
+          }
+          if (!moveStatus || !undo || !undo.disabled ||
+              undo.getAttribute('aria-label') !== 'Undo. Make a pour to enable.') {
+            throw new Error('Undo is not accessibly disabled before the first pour');
+          }
+          undo.click();
+          if (moveStatus.textContent !== 'Pours: 0' || undo.disabled !== true) {
+            throw new Error('Activating disabled Undo changed the untouched board');
           }
 
           summary.focus();
@@ -207,8 +219,10 @@
           }
 
           await pauseForKeyboard('enter-destination');
-          const moveStatus = gameDocument.querySelector('.move-status');
           await waitFor(() => moveStatus?.textContent === 'Pours: 1', 'the first legal keyboard pour');
+          if (undo.disabled || undo.getAttribute('aria-label') !== 'Undo last pour.') {
+            throw new Error('Undo did not become enabled and accessible after a pour');
+          }
           const poursAfterMove = moveStatus.textContent;
           if (gameDocument.querySelector('.screen.win.active')) {
             throw new Error('The two-pour Level 2 puzzle unexpectedly completed after one pour');
@@ -218,13 +232,10 @@
             throw new Error('Keyboard destination did not receive the source color run');
           }
 
-          const undo = Array.from(gameDocument.querySelectorAll('.toolbar button')).find(
-            (button) => button.textContent.trim() === 'Undo',
-          );
           const hint = Array.from(gameDocument.querySelectorAll('.toolbar button')).find(
             (button) => button.getAttribute('aria-label') === 'Hint. One free hint remaining.',
           );
-          if (!undo || !hint) throw new Error('Undo or Hint control is missing');
+          if (!hint) throw new Error('Hint control is missing');
           if (hint.textContent.trim() !== 'Hint: free') {
             throw new Error('The Hint button does not show that its next use is free');
           }
@@ -239,6 +250,13 @@
             'Undo to restore the exact Level 2 board',
           );
           const poursAfterUndo = moveStatus.textContent;
+          if (!undo.disabled || undo.getAttribute('aria-label') !== 'Undo. Make a pour to enable.') {
+            throw new Error('Undo remained enabled after its only pour was reversed');
+          }
+          undo.click();
+          if (moveStatus.textContent !== 'Pours: 0') {
+            throw new Error('Activating disabled Undo after reversal changed the board');
+          }
 
           const flushFrame = () => {
             const callback = pendingFrames.shift();
@@ -272,6 +290,9 @@
             keyboardTabEnterAdjacentDestination: 'passed',
             poursAfterMove,
             poursAfterUndo,
+            undoDisabledBeforePour: true,
+            undoEnabledAfterPour: true,
+            undoDisabledAfterUndo: true,
             keyboardUndoRestoredBoard: poursAfterUndo === 'Pours: 0',
             keyboardHintStatus: toast.textContent,
             hintChangedCanvas: true,
@@ -404,14 +425,19 @@
                 Array.from(gameDocument.querySelectorAll('.toolbar button')).some(
                   (button) => button.getAttribute('aria-label') === 'Hint. One free hint remaining.' &&
                     button.textContent.trim() === 'Hint: free',
+                ) &&
+                Array.from(gameDocument.querySelectorAll('.toolbar button')).some(
+                  (button) => button.textContent.trim() === 'Undo' && button.disabled &&
+                    button.getAttribute('aria-label') === 'Undo. Make a pour to enable.',
                 ),
-              'Restart to restore the free Hint affordance',
+              'Restart to restore the free Hint affordance and disable Undo',
             );
             const resetHintButton = Array.from(gameDocument.querySelectorAll('.toolbar button')).find(
               (button) => button.getAttribute('aria-label') === 'Hint. One free hint remaining.',
             );
             assertVisibleInViewport(resetHintButton, 'The reset free Hint control', gameWindow);
             interactions.restartRestoresFreeHint = true;
+            interactions.restartDisablesUndo = true;
           }
           if (interceptedAnimationFrames === 0) {
             throw new Error('The play animation loop was not intercepted for deterministic redraw testing');

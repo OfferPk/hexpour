@@ -58,6 +58,7 @@ export function mountApp(root: HTMLElement): void {
   let cleanupPlay: (() => void) | null = null;
   let moveStatus: HTMLDivElement | null = null;
   let cellButtons = new Map<string, HTMLButtonElement>();
+  let undoButton: HTMLButtonElement | null = null;
   let hintButton: HTMLButtonElement | null = null;
   let toastTimeout = 0;
 
@@ -148,7 +149,7 @@ export function mountApp(root: HTMLElement): void {
       'Target must be empty or share the same top color.',
       'Each cell has limited capacity (3–4).',
       '<strong>Win:</strong> every occupied stack is a single pure color.',
-      '<strong>Undo</strong> is unlimited.',
+      '<strong>Undo</strong> is unlimited and is enabled after your first pour.',
       '<strong>Hint:</strong> 1 free per level, then rewarded stub.',
     ];
     for (const html of bullets) {
@@ -414,6 +415,7 @@ export function mountApp(root: HTMLElement): void {
   function renderPlayShell(): void {
     cleanupPlay?.();
     cleanupPlay = null;
+    undoButton = null;
     if (!board) return;
     el.play.innerHTML = '';
     const top = div('topbar');
@@ -438,7 +440,8 @@ export function mountApp(root: HTMLElement): void {
     ctx = canvas.getContext('2d')!;
 
     const tools = div('toolbar');
-    const undoButton = button('Undo', 'btn secondary', () => doUndo());
+    undoButton = button('Undo', 'btn secondary', () => doUndo());
+    refreshUndoButton();
     const hintControl = button('Hint', 'btn secondary', () => void doHint());
     hintButton = hintControl;
     refreshHintButton();
@@ -561,6 +564,17 @@ export function mountApp(root: HTMLElement): void {
 
   function updateMoveStatus(): void {
     if (moveStatus) moveStatus.textContent = `Pours: ${undoStack.length}`;
+    refreshUndoButton();
+  }
+
+  function refreshUndoButton(): void {
+    if (!undoButton) return;
+    const canUndo = undoStack.length > 0;
+    undoButton.disabled = !canUndo;
+    undoButton.setAttribute(
+      'aria-label',
+      canUndo ? 'Undo last pour.' : 'Undo. Make a pour to enable.',
+    );
   }
 
   function pulseShake(a: Axial): void {
