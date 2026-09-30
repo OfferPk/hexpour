@@ -485,10 +485,31 @@
               gameDocument.querySelector('#play.screen.active .move-status')?.textContent === `Pours: ${expectedPours}`,
             `reloaded Level 2 to resume with ${expectedPours} pours`,
           );
+          const restoreStatus = gameDocument.querySelector('.toast[role="status"]');
+          const expectedRestoreMessage = expectedPours > 0
+            ? `Resumed Level 2 · ${expectedPours} ${expectedPours === 1 ? 'pour' : 'pours'}`
+            : '';
+          if (!restoreStatus) throw new Error('The restore status region is missing after reload');
+          if (expectedPours > 0) {
+            if (restoreStatus.textContent !== expectedRestoreMessage ||
+                !restoreStatus.classList.contains('show') ||
+                restoreStatus.getAttribute('aria-live') !== 'polite' ||
+                restoreStatus.getAttribute('aria-atomic') !== 'true' ||
+                restoreStatus.hasAttribute('tabindex') ||
+                gameDocument.activeElement === restoreStatus) {
+              throw new Error('A reload restoration must show one polite, non-focusing status cue');
+            }
+          } else if (restoreStatus.textContent !== '' || restoreStatus.classList.contains('show')) {
+            throw new Error('A fresh board after reload must not show a restore cue');
+          }
           return { gameWindow, gameDocument, pendingFrames: reloadedFrames };
         }
 
         async function testProgressNavigation(gameWindow, gameDocument, pendingFrames) {
+          let restoreStatus = gameDocument.querySelector('.toast[role="status"]');
+          if (!restoreStatus) throw new Error('The restore status region is missing during navigation tests');
+          restoreStatus.textContent = '';
+          restoreStatus.classList.remove('show');
           const backToLevels = () => gameDocument.querySelector(
             '#play.screen.active .topbar button[aria-label="Back to levels"]',
           );
@@ -569,9 +590,10 @@
           play.click();
           await waitForLevelTwo(1);
           if (gameDocument.querySelector('.overlay.open [role="dialog"]') ||
+              restoreStatus.textContent !== '' || restoreStatus.classList.contains('show') ||
               [activeCell(0, 0)?.getAttribute('aria-label'), activeCell(0, 1)?.getAttribute('aria-label')]
                 .some((label, index) => label !== progressedLabels[index])) {
-            throw new Error('Home → Play silently discarded the in-progress Level 2 board');
+            throw new Error('Ordinary Home → Play navigation changed progress or announced a restore');
           }
 
           const savedBeforeReload = JSON.parse(gameWindow.localStorage.getItem('hexpour:in-progress') || 'null');
@@ -582,8 +604,36 @@
           gameWindow = trueReload.gameWindow;
           gameDocument = trueReload.gameDocument;
           pendingFrames = trueReload.pendingFrames;
+          restoreStatus = gameDocument.querySelector('.toast[role="status"]');
+          if (!restoreStatus) throw new Error('The reloaded page has no status region');
           if (levelTwoLabels().some((label, index) => label !== progressedLabels[index])) {
             throw new Error('A true page reload did not restore the exact in-progress Level 2 board');
+          }
+
+          const restoredMessage = restoreStatus.textContent;
+          const statusMutations = [];
+          const statusObserver = new MutationObserver((records) => statusMutations.push(...records));
+          statusObserver.observe(restoreStatus, { childList: true, characterData: true, subtree: true });
+          await wait(1700);
+          if (restoreStatus.classList.contains('show')) {
+            statusObserver.disconnect();
+            throw new Error('The one-time restore cue did not dismiss');
+          }
+          backToLevels()?.click();
+          await waitFor(() => levelButton(2), 'Level 2 before ordinary post-reload navigation');
+          gameDocument.querySelector('#levels.screen.active .topbar button[aria-label="Back to home"]')?.click();
+          await waitFor(() => gameDocument.querySelector('#home.screen.active'), 'Home after post-reload navigation');
+          const homePlay = Array.from(gameDocument.querySelectorAll('#home.screen.active button')).find(
+            (button) => button.textContent.trim() === 'Play',
+          );
+          if (!homePlay) throw new Error('Home Play control is missing after reload restoration');
+          homePlay.click();
+          await waitForLevelTwo(1);
+          await wait(50);
+          statusObserver.disconnect();
+          if (statusMutations.length !== 0 || restoreStatus.textContent !== restoredMessage ||
+              restoreStatus.classList.contains('show')) {
+            throw new Error('Same-page navigation repeated or re-announced the reload cue');
           }
 
           backToLevels()?.click();
@@ -734,7 +784,13 @@
               backNavigationKeepsBoardWithoutPrompt: true,
               sameLevelSelectionResumesProgress: true,
               homePlayResumesProgress: true,
+              freshStartHasNoRestoreCue: true,
+              ordinaryNavigationDoesNotAnnounceRestore: true,
               truePageReloadRestoresBoardAndMoveCount: true,
+              trueReloadAnnouncesRestorationOnce: true,
+              restoreStatusIsPoliteAndNonFocusing: true,
+              samePageNavigationDoesNotRepeatRestoreCue: true,
+              reloadWithoutSavedProgressHasNoRestoreCue: true,
               changingLevelPromptsAccessibly: true,
               cancelPreservesBoardAndFocusAcrossReload: true,
               confirmedChangeStartsChosenLevelAndClearsOldSave: true,
@@ -918,6 +974,11 @@
               gameDocument.querySelector('.topbar .title')?.textContent.trim() === 'Level 2',
             'Level 2 canvas and accessible controls',
           );
+          const freshRestoreStatus = gameDocument.querySelector('.toast[role="status"]');
+          if (!freshRestoreStatus || freshRestoreStatus.textContent !== '' ||
+              freshRestoreStatus.classList.contains('show')) {
+            throw new Error('A fresh Level 2 run must not show a restore cue');
+          }
           const details = gameDocument.querySelector('details.accessible-board');
           const summary = details.querySelector('summary');
           const wrapper = gameDocument.querySelector('.play-canvas-wrap');

@@ -38,6 +38,7 @@ import {
 } from '../ads/stubs';
 import { cellAccessibleLabel } from './cellLabel';
 import { formatPourCount } from './pourCount';
+import { createReloadRestoreCueGate } from './restoreCue';
 import { getLevelChangeConfirmation } from './levelChangeConfirmation';
 import { getRestartConfirmation } from './restartConfirmation';
 import { BOARD_CUE_LEGEND } from './boardLegend';
@@ -50,6 +51,8 @@ type Screen = 'home' | 'levels' | 'play' | 'win';
 
 export function mountApp(root: HTMLElement): void {
   let persist: PersistData = loadPersist();
+  const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+  const shouldAnnounceRestore = createReloadRestoreCueGate(navigation?.type);
   let screen: Screen = 'home';
   let levelId = 1;
   let board: BoardState | null = null;
@@ -427,6 +430,7 @@ export function mountApp(root: HTMLElement): void {
     }
     levelId = id;
     const saved = discardConfirmed ? null : loadInProgress(def);
+    const announceRestore = shouldAnnounceRestore(saved !== null);
     if (saved) {
       board = saved.board;
       undoStack = saved.undoStack;
@@ -440,6 +444,9 @@ export function mountApp(root: HTMLElement): void {
     freeHintsLeft = 1;
     shakeKey = null;
     setScreen('play');
+    if (announceRestore && saved) {
+      showToast(`Resumed Level ${levelId} · ${formatPourCount(saved.moveCount)}`);
+    }
   }
 
   function focusPlayControls(): void {
