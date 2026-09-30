@@ -456,7 +456,7 @@
           };
         }
 
-        async function reloadAndPlay(gameWindow, gameDocument, expectedPours) {
+        async function reloadToHome(gameWindow, gameDocument) {
           const previousDocument = gameDocument;
           gameWindow.location.reload();
           await waitFor(
@@ -475,6 +475,13 @@
             reloadedFrames.push(callback);
             return ++nextFrameId;
           };
+          return { gameWindow, gameDocument, pendingFrames: reloadedFrames };
+        }
+
+        async function reloadAndPlay(gameWindow, gameDocument, expectedPours) {
+          const reloaded = await reloadToHome(gameWindow, gameDocument);
+          gameWindow = reloaded.gameWindow;
+          gameDocument = reloaded.gameDocument;
           const play = Array.from(gameDocument.querySelectorAll('#home.screen.active button')).find(
             (button) => button.textContent.trim() === 'Play',
           );
@@ -502,7 +509,7 @@
           } else if (restoreStatus.textContent !== '' || restoreStatus.classList.contains('show')) {
             throw new Error('A fresh board after reload must not show a restore cue');
           }
-          return { gameWindow, gameDocument, pendingFrames: reloadedFrames };
+          return { gameWindow, gameDocument, pendingFrames: reloaded.pendingFrames };
         }
 
         async function testProgressNavigation(gameWindow, gameDocument, pendingFrames) {
@@ -513,9 +520,63 @@
           const backToLevels = () => gameDocument.querySelector(
             '#play.screen.active .topbar button[aria-label="Back to levels"]',
           );
-          const levelButton = (id) => Array.from(
+          const levelButtons = () => Array.from(
             gameDocument.querySelectorAll('#levels.screen.active .level-btn'),
-          ).find((button) => button.textContent.trim() === String(id));
+          );
+          const levelIdOf = (button) => Number(/^Level (\d+)(?:,|$)/.exec(
+            button.getAttribute('aria-label') || '',
+          )?.[1]);
+          const levelButton = (id) => levelButtons().find((button) => levelIdOf(button) === id);
+          const levelButtonState = (button) => ({
+            text: button.textContent.trim(),
+            className: button.className,
+            accessibleName: button.getAttribute('aria-label'),
+            disabled: button.disabled,
+          });
+          const pickerState = () => new Map(
+            levelButtons().map((button) => [levelIdOf(button), levelButtonState(button)]),
+          );
+          const assertNoProgressCue = (baseline = null) => {
+            if (levelButtons().some((button) => button.classList.contains('in-progress') ||
+                button.querySelector('.level-progress-label, .level-resume-label'))) {
+              throw new Error('A level without saved progress has a stray in-progress cue');
+            }
+            if (baseline) {
+              for (const [id, expected] of baseline) {
+                const button = levelButton(id);
+                if (!button || JSON.stringify(levelButtonState(button)) !== JSON.stringify(expected)) {
+                  throw new Error(`Level ${id} changed when the in-progress cue was cleared`);
+                }
+              }
+            }
+          };
+          const assertProgressCue = (expectedPours, baseline) => {
+            const matching = levelButton(2);
+            const count = `${expectedPours} ${expectedPours === 1 ? 'pour' : 'pours'}`;
+            const status = matching?.querySelector('.level-progress-label');
+            const resume = matching?.querySelector('.level-resume-label');
+            if (!matching || !matching.classList.contains('in-progress') ||
+                status?.textContent !== 'In progress' || resume?.textContent !== `Resume · ${count}` ||
+                matching.getAttribute('aria-label') !== `Level 2, in progress, resume with ${count}` ||
+                status.getAttribute('aria-hidden') !== 'true' || resume.getAttribute('aria-hidden') !== 'true') {
+              throw new Error('The saved level does not expose one exact visible and accessible resume cue');
+            }
+            if (levelButtons().filter((button) => button.querySelector('.level-progress-label')).length !== 1 ||
+                matching.closest('[aria-live], [role="status"]')) {
+              throw new Error('The progress cue is duplicated or added as a redundant live announcement');
+            }
+            for (const [id, expected] of baseline) {
+              if (id === 2) continue;
+              const button = levelButton(id);
+              if (!button || JSON.stringify(levelButtonState(button)) !== JSON.stringify(expected)) {
+                throw new Error(`Level ${id} changed while Level 2 progress was marked`);
+              }
+            }
+            const persisted = JSON.parse(gameWindow.localStorage.getItem('hexpour_v1') || 'null');
+            if (persisted?.unlocked !== 2) {
+              throw new Error('Displaying saved progress changed the unlocked level');
+            }
+          };
           const activeCell = (q, r) => Array.from(
             gameDocument.querySelectorAll('#play.screen.active details.accessible-board button.cell-control'),
           ).find((button) => button.getAttribute('aria-label')?.startsWith(`Hex cell q ${q}, r ${r}:`));
@@ -542,6 +603,8 @@
             throw new Error(`Back-to-levels click did not activate Levels; active screens: ${Array.from(gameDocument.querySelectorAll('.screen.active')).map((screen) => screen.className).join(', ')}`);
           }
           await waitFor(() => levelButton(2), 'the Level 2 selector after a safe back action');
+          assertNoProgressCue();
+          const initialPickerState = pickerState();
           if (gameDocument.querySelector('.overlay.open [role="dialog"]')) {
             throw new Error('Back to levels prompted even though no board progress would be lost');
           }
@@ -569,6 +632,7 @@
 
           backToLevels()?.click();
           await waitFor(() => levelButton(2), 'the level selector after leaving a progressed board');
+          assertProgressCue(1, initialPickerState);
           if (gameDocument.querySelector('.overlay.open [role="dialog"]')) {
             throw new Error('Back to levels prompted even though it preserves the in-memory board');
           }
@@ -600,10 +664,26 @@
           if (savedBeforeReload?.version !== 1 || savedBeforeReload.levelId !== 2 || savedBeforeReload.moveCount !== 1) {
             throw new Error('A successful pour did not create the expected versioned Level 2 snapshot');
           }
-          const trueReload = await reloadAndPlay(gameWindow, gameDocument, 1);
+          const trueReload = await reloadToHome(gameWindow, gameDocument);
           gameWindow = trueReload.gameWindow;
           gameDocument = trueReload.gameDocument;
           pendingFrames = trueReload.pendingFrames;
+          const levels = Array.from(gameDocument.querySelectorAll('#home.screen.active button')).find(
+            (button) => button.textContent.trim() === 'Levels',
+          );
+          if (!levels) throw new Error('Home Levels control is missing after the true reload');
+          levels.click();
+          await waitFor(() => levelButton(2), 'the restored level picker before resuming');
+          assertProgressCue(1, initialPickerState);
+          restoreStatus = gameDocument.querySelector('.toast[role="status"]');
+          if (!restoreStatus || restoreStatus.textContent !== '' || restoreStatus.classList.contains('show')) {
+            throw new Error('The picker cue redundantly announced the saved board through the live status region');
+          }
+          levelButton(2).click();
+          await waitForLevelTwo(1);
+          if (gameDocument.querySelector('.overlay.open [role="dialog"]')) {
+            throw new Error('Resuming the marked level showed a destructive-switch prompt');
+          }
           restoreStatus = gameDocument.querySelector('.toast[role="status"]');
           if (!restoreStatus) throw new Error('The reloaded page has no status region');
           if (levelTwoLabels().some((label, index) => label !== progressedLabels[index])) {
@@ -663,6 +743,11 @@
               gameDocument.activeElement !== gameDocument.querySelector('#play.screen.active .accessible-board > summary')) {
             throw new Error('Canceling a level change did not preserve and restore the active board');
           }
+          backToLevels()?.click();
+          await waitFor(() => levelButton(2), 'the picker after canceling a level switch');
+          assertProgressCue(1, initialPickerState);
+          levelButton(2).click();
+          await waitForLevelTwo(1);
           const cancelReload = await reloadAndPlay(gameWindow, gameDocument, 1);
           gameWindow = cancelReload.gameWindow;
           gameDocument = cancelReload.gameDocument;
@@ -771,6 +856,11 @@
           if (gameWindow.localStorage.getItem('hexpour:in-progress') !== null) {
             throw new Error('Confirming Restart did not clear the saved progress');
           }
+          backToLevels()?.click();
+          await waitFor(() => levelButton(2), 'the picker after confirming Restart');
+          assertNoProgressCue(initialPickerState);
+          levelButton(2).click();
+          await waitForLevelTwo(0);
           const restartReload = await reloadAndPlay(gameWindow, gameDocument, 0);
           gameWindow = restartReload.gameWindow;
           gameDocument = restartReload.gameDocument;
@@ -779,11 +869,55 @@
             throw new Error('A true reload after Restart did not begin with the original Level 2 board');
           }
 
+          const solveDetails = gameDocument.querySelector('#play.screen.active details.accessible-board');
+          const solveSummary = solveDetails?.querySelector('summary');
+          if (solveDetails && solveSummary && !solveDetails.open) solveSummary.click();
+          await waitFor(() => solveDetails?.open, 'Level 2 controls before testing solve cleanup');
+          activeCell(0, 0)?.click();
+          activeCell(0, 1)?.click();
+          await waitForLevelTwo(1);
+          backToLevels()?.click();
+          await waitFor(() => levelButton(2), 'Level 2 after creating solve-test progress');
+          assertProgressCue(1, initialPickerState);
+          levelButton(2).click();
+          await waitForLevelTwo(1);
+          const finalDetails = gameDocument.querySelector('#play.screen.active details.accessible-board');
+          const finalSummary = finalDetails?.querySelector('summary');
+          if (finalDetails && finalSummary && !finalDetails.open) finalSummary.click();
+          await waitFor(() => finalDetails?.open, 'the restored Level 2 controls before the winning pour');
+          activeCell(1, 0)?.click();
+          activeCell(0, 0)?.click();
+          await waitFor(() => gameDocument.querySelector('#win.screen.active'), 'Level 2 solve cleanup');
+          if (gameWindow.localStorage.getItem('hexpour:in-progress') !== null) {
+            throw new Error('Solving a progressed Level 2 board retained its saved marker');
+          }
+          const levelsAfterSolve = Array.from(gameDocument.querySelectorAll('#win.screen.active button')).find(
+            (button) => button.textContent.trim() === 'Levels',
+          );
+          if (!levelsAfterSolve) throw new Error('The solved-level picker control is missing');
+          levelsAfterSolve.click();
+          await waitFor(() => gameDocument.querySelector('#levels.screen.active .level-btn'), 'the picker after solving Level 2');
+          assertNoProgressCue();
+          const levelTwoAfterSolve = levelButton(2);
+          const levelThreeAfterSolve = levelButton(3);
+          const levelFourAfterSolve = levelButton(4);
+          const persistedAfterSolve = JSON.parse(gameWindow.localStorage.getItem('hexpour_v1') || 'null');
+          if (!levelTwoAfterSolve?.classList.contains('done') ||
+              levelTwoAfterSolve.classList.contains('in-progress') ||
+              levelThreeAfterSolve?.disabled || levelFourAfterSolve?.disabled !== true ||
+              persistedAfterSolve?.unlocked !== 3) {
+            throw new Error('Solving cleared the cue but did not preserve the expected completion and unlock state');
+          }
+          levelTwoAfterSolve.click();
+          await waitForLevelTwo(0);
+
           return {
             result: {
               backNavigationKeepsBoardWithoutPrompt: true,
               sameLevelSelectionResumesProgress: true,
               homePlayResumesProgress: true,
+              restoredPickerCuePrecedesResume: true,
+              cueDoesNotRepeatThroughLiveRegionOrChangeUnlocks: true,
               freshStartHasNoRestoreCue: true,
               ordinaryNavigationDoesNotAnnounceRestore: true,
               truePageReloadRestoresBoardAndMoveCount: true,
@@ -793,8 +927,11 @@
               reloadWithoutSavedProgressHasNoRestoreCue: true,
               changingLevelPromptsAccessibly: true,
               cancelPreservesBoardAndFocusAcrossReload: true,
+              cancelLevelSwitchKeepsSavedPickerCue: true,
               confirmedChangeStartsChosenLevelAndClearsOldSave: true,
+              confirmedRestartClearsPickerCue: true,
               solveClearsSnapshotAndNextLevelStartsFresh: true,
+              solvingSavedBoardClearsPickerCue: true,
               restartCancelPreservesProgressAcrossReload: true,
               confirmedRestartClearsProgressAcrossReload: true,
             },

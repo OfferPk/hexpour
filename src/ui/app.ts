@@ -379,6 +379,15 @@ export function mountApp(root: HTMLElement): void {
   // —— LEVELS ——
   function renderLevels(): void {
     persist = loadPersist();
+    let savedProgress: { levelId: number; moveCount: number } | null = null;
+    for (let id = 1; id <= LEVEL_COUNT; id++) {
+      const definition = getLevel(id);
+      const saved = definition ? loadInProgress(definition) : null;
+      if (saved) {
+        savedProgress = { levelId: saved.levelId, moveCount: saved.moveCount };
+        break;
+      }
+    }
     el.levels.innerHTML = '';
     const top = div('topbar');
     top.append(
@@ -396,10 +405,33 @@ export function mountApp(root: HTMLElement): void {
     for (let i = 1; i <= LEVEL_COUNT; i++) {
       const locked = i > persist.unlocked;
       const done = i < persist.unlocked;
+      const progress = !locked && savedProgress?.levelId === i ? savedProgress : null;
       const b = document.createElement('button');
       b.className = 'level-btn' + (locked ? ' locked' : '') + (done ? ' done' : '');
-      b.textContent = locked ? '🔒' : String(i);
-      b.setAttribute('aria-label', locked ? `Level ${i}, locked` : done ? `Level ${i}, complete` : `Level ${i}`);
+      if (progress) {
+        const count = formatPourCount(progress.moveCount);
+        b.classList.add('in-progress');
+        const number = document.createElement('span');
+        number.className = 'level-number';
+        number.setAttribute('aria-hidden', 'true');
+        number.textContent = String(i);
+        const status = document.createElement('span');
+        status.className = 'level-progress-label';
+        status.setAttribute('aria-hidden', 'true');
+        status.textContent = 'In progress';
+        const resume = document.createElement('span');
+        resume.className = 'level-resume-label';
+        resume.setAttribute('aria-hidden', 'true');
+        resume.textContent = `Resume · ${count}`;
+        b.replaceChildren(number, status, resume);
+        b.setAttribute(
+          'aria-label',
+          `Level ${i}${done ? ', complete' : ''}, in progress, resume with ${count}`,
+        );
+      } else {
+        b.textContent = locked ? '🔒' : String(i);
+        b.setAttribute('aria-label', locked ? `Level ${i}, locked` : done ? `Level ${i}, complete` : `Level ${i}`);
+      }
       b.disabled = locked;
       if (!locked) {
         b.addEventListener('click', () => startLevel(i));
