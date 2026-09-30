@@ -26,6 +26,44 @@ export function areAdjacent(a: Axial, b: Axial): boolean {
   return AXIAL_DIRS.some((d) => d.q === dq && d.r === dr);
 }
 
+export type ScreenDirection = 'up' | 'down' | 'left' | 'right';
+
+/** Choose the nearest cell lying in a screen direction from the current cell. */
+export function nearestCellInDirection(
+  cells: readonly Axial[],
+  origin: Axial,
+  direction: ScreenDirection,
+): Axial | null {
+  const vectors: Record<ScreenDirection, { x: number; y: number }> = {
+    up: { x: 0, y: -1 },
+    down: { x: 0, y: 1 },
+    left: { x: -1, y: 0 },
+    right: { x: 1, y: 0 },
+  };
+  const vector = vectors[direction];
+  const point = axialToPixel(origin.q, origin.r, 1);
+  let nearest: Axial | null = null;
+  let nearestScore = Infinity;
+
+  for (const cell of cells) {
+    if (cell.q === origin.q && cell.r === origin.r) continue;
+    const candidate = axialToPixel(cell.q, cell.r, 1);
+    const dx = candidate.x - point.x;
+    const dy = candidate.y - point.y;
+    const forward = dx * vector.x + dy * vector.y;
+    if (forward <= 0) continue;
+
+    const perpendicular = dx * vector.y - dy * vector.x;
+    const score = dx * dx + dy * dy + perpendicular * perpendicular;
+    if (score < nearestScore - 1e-9) {
+      nearest = cell;
+      nearestScore = score;
+    }
+  }
+
+  return nearest ? { q: nearest.q, r: nearest.r } : null;
+}
+
 /** Flat-top: pixel center of axial cell. */
 export function axialToPixel(q: number, r: number, size: number): { x: number; y: number } {
   const x = size * ((3 / 2) * q);

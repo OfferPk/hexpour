@@ -52,8 +52,8 @@ async function waitFor(expression, label, timeoutMs = 15_000) {
 }
 
 async function pressKey(key) {
-  const virtualKey = ({ Tab: 9, Enter: 13, Escape: 27 })[key];
-  const keyParams = { key, code: key, windowsVirtualKeyCode: virtualKey, nativeVirtualKeyCode: virtualKey };
+  const virtualKey = ({ Tab: 9, Enter: 13, Escape: 27, ArrowUp: 38, ArrowDown: 40, ArrowLeft: 37, ArrowRight: 39, Space: 32 })[key];
+  const keyParams = { key: key === 'Space' ? ' ' : key, code: key, windowsVirtualKeyCode: virtualKey, nativeVirtualKeyCode: virtualKey };
   await command('Input.dispatchKeyEvent', { type: 'keyDown', ...keyParams });
   if (key === 'Enter') {
     await command('Input.dispatchKeyEvent', { type: 'char', ...keyParams, text: '\r', unmodifiedText: '\r' });
@@ -78,6 +78,7 @@ const stateExpression = `(() => {
   const active=document.activeElement;
   const progress=localStorage.getItem('hexpour:in-progress');
   return {
+    activeCell:{label:active?.getAttribute('aria-label'),focusVisible:active instanceof HTMLElement&&active.matches(':focus-visible')},
     source:{label:source?.getAttribute('aria-label'),base:normalize(source?.getAttribute('aria-label')),pressed:source?.getAttribute('aria-pressed'),selected:source?.classList.contains('selected'),focus:active===source,focusVisible:source?.matches(':focus-visible')||false},
     destination:{label:destination?.getAttribute('aria-label'),base:normalize(destination?.getAttribute('aria-label')),legal:destination?.classList.contains('legal-target'),focus:active===destination,focusVisible:destination?.matches(':focus-visible')||false},
     board:controls.map(b=>[normalize(b.getAttribute('aria-label')),b.disabled]),
@@ -85,6 +86,7 @@ const stateExpression = `(() => {
     selectionRole:play.querySelector('.screen-reader-status')?.getAttribute('role'),
     selectionLive:play.querySelector('.screen-reader-status')?.getAttribute('aria-live'),
     selectionAtomic:play.querySelector('.screen-reader-status')?.getAttribute('aria-atomic'),
+    keyboardInstructions:play.querySelector('.accessible-board p')?.textContent,
     moveStatus:play.querySelector('.move-status')?.textContent,
     undoDisabled:undo?.disabled,
     settings:localStorage.getItem('hexpour_v1'),
@@ -191,12 +193,39 @@ try {
   if (before.moveStatus !== 'Pours: 1' || before.undoDisabled || before.progress !== savedRun || before.settings !== settings) {
     throw new Error(`The isolated Level 2 fixture was not restored intact: ${JSON.stringify(before)}`);
   }
+  if (!before.keyboardInstructions?.includes('arrow keys') || !before.keyboardInstructions.includes('Enter or Space')) {
+    throw new Error(`Keyboard instructions do not explain focus and explicit activation: ${before.keyboardInstructions}`);
+  }
   await pressKey('Tab');
   const focusedSource = await evaluate(stateExpression);
   if (!focusedSource.source.focus || !focusedSource.source.focusVisible) {
     throw new Error(`Tab did not focus the Level 2 source visibly: ${JSON.stringify(focusedSource.source)}`);
   }
-  await pressKey('Enter');
+  const arrowSteps = [
+    ['ArrowRight', 'Hex cell q 1, r 0:'],
+    ['ArrowLeft', 'Hex cell q 0, r 0:'],
+    ['ArrowDown', 'Hex cell q 0, r 1:'],
+    ['ArrowUp', 'Hex cell q 0, r 0:'],
+  ];
+  const arrowFocuses = [];
+  for (const [key, expectedLabel] of arrowSteps) {
+    await pressKey(key);
+    const snapshot = await evaluate(stateExpression);
+    if (!snapshot.activeCell?.label?.startsWith(expectedLabel) || !snapshot.activeCell.focusVisible) {
+      throw new Error(`${key} did not move visible keyboard focus to ${expectedLabel}: ${JSON.stringify(snapshot.activeCell)}`);
+    }
+    const focusOnly = snapshot.moveStatus === before.moveStatus &&
+      snapshot.undoDisabled === before.undoDisabled &&
+      snapshot.progress === before.progress && snapshot.settings === before.settings &&
+      JSON.stringify(snapshot.board) === JSON.stringify(before.board) &&
+      snapshot.selectionText === before.selectionText;
+    if (!focusOnly) {
+      throw new Error(`${key} changed game or saved state instead of only moving focus: ${JSON.stringify(snapshot)}`);
+    }
+    arrowFocuses.push({ key, label: snapshot.activeCell.label });
+  }
+
+  await pressKey('Space');
   await waitFor(`document.querySelector('#play.screen.active .cell-control[aria-pressed="true"]')`, 'source selection');
   await evaluate('new Promise(resolveFrame=>requestAnimationFrame(()=>requestAnimationFrame(resolveFrame)))');
   const selected = await evaluate(stateExpression);
@@ -245,7 +274,8 @@ try {
     status: 'PASS',
     target: targetUrl,
     profile: 'fresh disposable Chromium profile; removed after test',
-    selection: { keyboardSourceFocus: true, selectedCue: true, legalDestinationCue: true, liveStatus: selected.selectionText },
+    arrowNavigation: { tabFocus: true, directions: arrowFocuses, focusOnlyNoMutation: true, updatedAccessibleCellName: true },
+    selection: { activatedWithSpace: true, selectedCue: true, legalDestinationCue: true, liveStatus: selected.selectionText },
     escape: { deselectedOnly: true, keyboardFocusPreserved: true, visualCueCleared: true, exactBoardAndHistoryPreserved: true, exactSavedSnapshotPreserved: true, exactSettingsAndUnlocksPreserved: true },
     reselectAndMove: { keyboardReselection: true, legalDestinationFocused: true, moveCount: afterLegalMove.progressSummary.moveCount, undoAvailable: !afterLegalMove.undoDisabled },
   }, null, 2));

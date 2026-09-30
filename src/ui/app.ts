@@ -21,7 +21,11 @@ import {
 } from '../game/persist';
 import { clearInProgress, loadInProgress, saveInProgress } from '../game/inProgress';
 import type { Axial, BoardState } from '../game/types';
-import { areAdjacent } from '../game/hex';
+import {
+  areAdjacent,
+  nearestCellInDirection,
+  type ScreenDirection,
+} from '../game/hex';
 import { LEVEL_COUNT, getLevel } from '../levels/index';
 import {
   computeLayout,
@@ -48,6 +52,13 @@ import {
 } from './canvasViewport';
 
 type Screen = 'home' | 'levels' | 'play' | 'win';
+
+const ARROW_DIRECTIONS: Partial<Record<KeyboardEvent['key'], ScreenDirection>> = {
+  ArrowUp: 'up',
+  ArrowDown: 'down',
+  ArrowLeft: 'left',
+  ArrowRight: 'right',
+};
 
 export function mountApp(root: HTMLElement): void {
   let persist: PersistData = loadPersist();
@@ -670,7 +681,7 @@ export function mountApp(root: HTMLElement): void {
     summary.textContent = 'Keyboard and screen reader controls';
     const instructions = document.createElement('p');
     instructions.textContent =
-      'Use Tab to choose a cell and Enter or Space to activate it. ' +
+      'Use arrow keys or Tab to choose a cell; press Enter or Space to activate it. ' +
       'Press Escape to deselect the current source. ' +
       'Select a cell with tokens, then select an adjacent destination.';
     const grid = div('cell-control-grid');
@@ -685,6 +696,23 @@ export function mountApp(root: HTMLElement): void {
       cellButtons.set(key, control);
       grid.append(control);
     }
+    grid.addEventListener('keydown', (event: KeyboardEvent) => {
+      const direction = ARROW_DIRECTIONS[event.key];
+      if (!direction || !board || !(event.target instanceof HTMLButtonElement)) return;
+
+      const currentKey = Array.from(cellButtons.entries())
+        .find(([, control]) => control === event.target)?.[0];
+      const current = currentKey ? board.cells.get(currentKey) : undefined;
+      if (!current) return;
+
+      const destination = nearestCellInDirection(
+        Array.from(board.cells.values()).filter((cell) => !cell.blocked),
+        current,
+        direction,
+      );
+      event.preventDefault();
+      if (destination) cellButtons.get(`${destination.q},${destination.r}`)?.focus();
+    });
     controls.append(summary, instructions, grid);
     el.play.append(top, moveStatus, selectionStatus, legend, wrap, tools, controls);
     refreshCellControls();
