@@ -289,9 +289,10 @@
           if (gameDocument.querySelector('.screen.win.active')) {
             throw new Error('The two-pour Level 2 puzzle unexpectedly completed after one pour');
           }
-          if (source.getAttribute('aria-label')?.includes('red.') !== true ||
-              !destination.getAttribute('aria-label')?.includes('green, green')) {
-            throw new Error('Keyboard destination did not receive the source color run');
+          if (gameDocument.activeElement !== destination ||
+              !source.getAttribute('aria-label')?.includes('bottom to top red; 1 of 3 slots filled.') ||
+              !destination.getAttribute('aria-label')?.includes('bottom to top green, green; 2 of 3 slots filled.')) {
+            throw new Error('Keyboard pour did not update concise cell names while retaining destination focus');
           }
 
           source.focus();

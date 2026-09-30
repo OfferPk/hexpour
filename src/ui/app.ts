@@ -827,7 +827,7 @@ export function mountApp(root: HTMLElement): void {
       const active = selected?.q === cell.q && selected.r === cell.r;
       const legalTarget = legalDestinationKeys.has(key);
       const blockedNeighbor = blockedNeighborKeys.has(key);
-      const label = cellAccessibleLabel(cell);
+      const label = cellAccessibleLabel(cell, board.capacity);
       control.setAttribute(
         'aria-label',
         active

@@ -175,17 +175,19 @@ describe('full 40-level pack', () => {
 });
 
 describe('accessible cell labels', () => {
-  it('announces stack colors in bottom-to-top order and identifies the top color', () => {
+  it('announces stack colors bottom-to-top with concise occupied-slot capacity', () => {
     expect(
-      cellAccessibleLabel({ q: -1, r: 2, blocked: false, stack: ['G', 'R', 'R'] }),
-    ).toBe('Hex cell q -1, r 2: tokens bottom to top green, red, red. Top color red moves first.');
+      cellAccessibleLabel({ q: -1, r: 2, blocked: false, stack: ['G', 'R', 'R'] }, 4),
+    ).toBe(
+      'Hex cell q -1, r 2: bottom to top green, red, red; 3 of 4 slots filled.',
+    );
   });
 
   it('identifies empty destinations and blocked holes', () => {
-    expect(cellAccessibleLabel({ q: 0, r: 1, blocked: false, stack: [] })).toContain(
-      'empty. Available as a pour target.',
+    expect(cellAccessibleLabel({ q: 0, r: 1, blocked: false, stack: [] }, 3)).toBe(
+      'Hex cell q 0, r 1: empty; 0 of 3 slots filled. Available as a pour target.',
     );
-    expect(cellAccessibleLabel({ q: 2, r: -1, blocked: true, stack: [] })).toContain(
+    expect(cellAccessibleLabel({ q: 2, r: -1, blocked: true, stack: [] }, 4)).toContain(
       'blocked hole.',
     );
   });

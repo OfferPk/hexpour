@@ -196,22 +196,27 @@ try {
   if (!before.keyboardInstructions?.includes('arrow keys') || !before.keyboardInstructions.includes('Enter or Space')) {
     throw new Error(`Keyboard instructions do not explain focus and explicit activation: ${before.keyboardInstructions}`);
   }
+  if (!before.source.label?.includes('1 of 3 slots filled') ||
+      !before.destination.label?.includes('2 of 3 slots filled')) {
+    throw new Error(`Level 2 cell names omit current fill count or capacity: ${JSON.stringify({ source: before.source.label, destination: before.destination.label })}`);
+  }
   await pressKey('Tab');
   const focusedSource = await evaluate(stateExpression);
   if (!focusedSource.source.focus || !focusedSource.source.focusVisible) {
     throw new Error(`Tab did not focus the Level 2 source visibly: ${JSON.stringify(focusedSource.source)}`);
   }
   const arrowSteps = [
-    ['ArrowRight', 'Hex cell q 1, r 0:'],
-    ['ArrowLeft', 'Hex cell q 0, r 0:'],
-    ['ArrowDown', 'Hex cell q 0, r 1:'],
-    ['ArrowUp', 'Hex cell q 0, r 0:'],
+    ['ArrowRight', 'Hex cell q 1, r 0:', '2 of 3 slots filled'],
+    ['ArrowLeft', 'Hex cell q 0, r 0:', '1 of 3 slots filled'],
+    ['ArrowDown', 'Hex cell q 0, r 1:', '2 of 3 slots filled'],
+    ['ArrowUp', 'Hex cell q 0, r 0:', '1 of 3 slots filled'],
   ];
   const arrowFocuses = [];
-  for (const [key, expectedLabel] of arrowSteps) {
+  for (const [key, expectedLabel, expectedFill] of arrowSteps) {
     await pressKey(key);
     const snapshot = await evaluate(stateExpression);
-    if (!snapshot.activeCell?.label?.startsWith(expectedLabel) || !snapshot.activeCell.focusVisible) {
+    if (!snapshot.activeCell?.label?.startsWith(expectedLabel) ||
+        !snapshot.activeCell.label.includes(expectedFill) || !snapshot.activeCell.focusVisible) {
       throw new Error(`${key} did not move visible keyboard focus to ${expectedLabel}: ${JSON.stringify(snapshot.activeCell)}`);
     }
     const focusOnly = snapshot.moveStatus === before.moveStatus &&
@@ -268,6 +273,11 @@ try {
       afterLegalMove.progressSummary?.undoCount !== 2 || afterLegalMove.undoDisabled ||
       afterLegalMove.settings !== before.settings || JSON.stringify(afterLegalMove.board) === JSON.stringify(before.board)) {
     throw new Error(`The legal move did not work cleanly after Escape/reselection: ${JSON.stringify(afterLegalMove)}`);
+  }
+  if (!afterLegalMove.source.base?.includes('0 of 3 slots filled') ||
+      !afterLegalMove.destination.label?.includes('3 of 3 slots filled') ||
+      !afterLegalMove.destination.focus || !afterLegalMove.destination.focusVisible) {
+    throw new Error(`A pour did not update the direct cell names while preserving target focus: ${JSON.stringify({ source: afterLegalMove.source.base, destination: afterLegalMove.destination })}`);
   }
 
   console.log(JSON.stringify({
