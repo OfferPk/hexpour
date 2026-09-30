@@ -19,6 +19,7 @@ import {
   unlockLevel,
   type PersistData,
 } from '../game/persist';
+import { clearInProgress, loadInProgress, saveInProgress } from '../game/inProgress';
 import type { Axial, BoardState } from '../game/types';
 import { areAdjacent } from '../game/hex';
 import { LEVEL_COUNT, getLevel } from '../levels/index';
@@ -425,8 +426,15 @@ export function mountApp(root: HTMLElement): void {
       }
     }
     levelId = id;
-    board = loadBoard(def);
-    undoStack = [];
+    const saved = discardConfirmed ? null : loadInProgress(def);
+    if (saved) {
+      board = saved.board;
+      undoStack = saved.undoStack;
+    } else {
+      clearInProgress();
+      board = loadBoard(def);
+      undoStack = [];
+    }
     selected = null;
     hint = null;
     freeHintsLeft = 1;
@@ -602,7 +610,12 @@ export function mountApp(root: HTMLElement): void {
     hint = null;
     updateMoveStatus();
     refreshCellControls();
-    if (isWon(board)) onWin();
+    if (isWon(board)) {
+      onWin();
+    } else {
+      const def = getLevel(levelId);
+      if (def) saveInProgress(def, board, undoStack);
+    }
   }
 
   function refreshCellControls(): void {
@@ -730,6 +743,12 @@ export function mountApp(root: HTMLElement): void {
     hint = null;
     updateMoveStatus();
     refreshCellControls();
+    if (undoStack.length === 0) {
+      clearInProgress();
+    } else {
+      const def = getLevel(levelId);
+      if (def) saveInProgress(def, board, undoStack);
+    }
   }
 
   function refreshHintButton(): void {
@@ -849,6 +868,7 @@ export function mountApp(root: HTMLElement): void {
   }
 
   function onWin(): void {
+    clearInProgress();
     const next = levelId + 1;
     if (next <= LEVEL_COUNT) {
       persist = unlockLevel(next);

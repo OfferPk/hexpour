@@ -205,7 +205,7 @@ try {
       const evaluation = await command('Runtime.evaluate', {
         expression: `(() => {
           const node = document.getElementById('test-result');
-          return node ? { status: node.dataset.status, detail: node.textContent } : null;
+          return node ? { status: node.dataset.status, detail: node.textContent, progress: node.dataset.progress || '' } : null;
         })()`,
         returnByValue: true,
       });
@@ -240,7 +240,7 @@ try {
     }
 
     if (!testResult || testResult.status === 'running' || testResult.status.startsWith('awaiting:')) {
-      throw new Error(`The ${viewport.name} browser test did not finish within 30 seconds.`);
+      throw new Error(`The ${viewport.name} browser test did not finish within 30 seconds (last phase: ${testResult?.progress || 'unknown'}).`);
     }
     if (testResult.status !== 'pass') {
       throw new Error(`${viewport.name} browser regression failed: ${testResult.detail || 'no failure details'}`);

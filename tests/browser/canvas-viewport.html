@@ -58,6 +58,7 @@
             'hexpour_v1',
             JSON.stringify({ unlocked: 2, adsRemoved: false, mute: false }),
           );
+          localStorage.removeItem('hexpour:in-progress');
           localStorage.setItem('hexpour:howto', '1');
           sessionStorage.setItem('hexpour:a2hs', '1');
           frame.style.width = `${width}px`;
@@ -455,7 +456,39 @@
           };
         }
 
-        async function testProgressNavigation(gameWindow, gameDocument) {
+        async function reloadAndPlay(gameWindow, gameDocument, expectedPours) {
+          const previousDocument = gameDocument;
+          gameWindow.location.reload();
+          await waitFor(
+            () => frame.contentDocument && frame.contentDocument !== previousDocument &&
+              frame.contentDocument.querySelector('#home.screen.active') &&
+              Array.from(frame.contentDocument.querySelectorAll('#home.screen.active button')).some(
+                (button) => button.textContent.trim() === 'Play',
+              ),
+            'a true game-document reload back to Home',
+          );
+          gameWindow = frame.contentWindow;
+          gameDocument = frame.contentDocument;
+          const reloadedFrames = [];
+          let nextFrameId = 0;
+          gameWindow.requestAnimationFrame = (callback) => {
+            reloadedFrames.push(callback);
+            return ++nextFrameId;
+          };
+          const play = Array.from(gameDocument.querySelectorAll('#home.screen.active button')).find(
+            (button) => button.textContent.trim() === 'Play',
+          );
+          if (!play) throw new Error('Home Play control is missing after a true page reload');
+          play.click();
+          await waitFor(
+            () => gameDocument.querySelector('#play.screen.active .topbar .title')?.textContent.trim() === 'Level 2' &&
+              gameDocument.querySelector('#play.screen.active .move-status')?.textContent === `Pours: ${expectedPours}`,
+            `reloaded Level 2 to resume with ${expectedPours} pours`,
+          );
+          return { gameWindow, gameDocument, pendingFrames: reloadedFrames };
+        }
+
+        async function testProgressNavigation(gameWindow, gameDocument, pendingFrames) {
           const backToLevels = () => gameDocument.querySelector(
             '#play.screen.active .topbar button[aria-label="Back to levels"]',
           );
@@ -470,10 +503,15 @@
               gameDocument.querySelector('#play.screen.active .move-status')?.textContent === `Pours: ${pours}`,
             `Level 2 to show ${pours} pours`,
           );
+          const levelTwoLabels = () => [
+            activeCell(0, 0)?.getAttribute('aria-label'),
+            activeCell(0, 1)?.getAttribute('aria-label'),
+          ];
 
           if (gameDocument.querySelector('#play.screen.active .move-status')?.textContent !== 'Pours: 0') {
             throw new Error('Navigation regression must begin on a fresh Level 2 board');
           }
+          const initialLevelTwoLabels = levelTwoLabels();
           const initialBack = backToLevels();
           if (!initialBack) {
             throw new Error(`Back-to-levels control is missing on ${gameDocument.querySelector('#play')?.className || 'no play screen'}`);
@@ -536,6 +574,18 @@
             throw new Error('Home → Play silently discarded the in-progress Level 2 board');
           }
 
+          const savedBeforeReload = JSON.parse(gameWindow.localStorage.getItem('hexpour:in-progress') || 'null');
+          if (savedBeforeReload?.version !== 1 || savedBeforeReload.levelId !== 2 || savedBeforeReload.moveCount !== 1) {
+            throw new Error('A successful pour did not create the expected versioned Level 2 snapshot');
+          }
+          const trueReload = await reloadAndPlay(gameWindow, gameDocument, 1);
+          gameWindow = trueReload.gameWindow;
+          gameDocument = trueReload.gameDocument;
+          pendingFrames = trueReload.pendingFrames;
+          if (levelTwoLabels().some((label, index) => label !== progressedLabels[index])) {
+            throw new Error('A true page reload did not restore the exact in-progress Level 2 board');
+          }
+
           backToLevels()?.click();
           await waitFor(() => levelButton(1), 'Level 1 as an alternate unlocked choice');
           levelButton(1).click();
@@ -563,6 +613,13 @@
               gameDocument.activeElement !== gameDocument.querySelector('#play.screen.active .accessible-board > summary')) {
             throw new Error('Canceling a level change did not preserve and restore the active board');
           }
+          const cancelReload = await reloadAndPlay(gameWindow, gameDocument, 1);
+          gameWindow = cancelReload.gameWindow;
+          gameDocument = cancelReload.gameDocument;
+          pendingFrames = cancelReload.pendingFrames;
+          if (levelTwoLabels().some((label, index) => label !== progressedLabels[index])) {
+            throw new Error('Canceling a level switch failed to preserve the board across a true reload');
+          }
 
           backToLevels()?.click();
           await waitFor(() => levelButton(1), 'Level 1 before confirming a level change');
@@ -582,6 +639,9 @@
               !gameDocument.querySelector('.overlay.open [role="dialog"]'),
             'the confirmed fresh Level 1 board',
           );
+          if (gameWindow.localStorage.getItem('hexpour:in-progress') !== null) {
+            throw new Error('Confirming a level switch did not clear the old level snapshot');
+          }
 
           const levelOneDetails = gameDocument.querySelector('#play.screen.active details.accessible-board');
           const levelOneSummary = levelOneDetails?.querySelector('summary');
@@ -596,6 +656,9 @@
             () => gameDocument.querySelector('#win.screen.active'),
             'Level 1 completion before the next-level exit',
           );
+          if (gameWindow.localStorage.getItem('hexpour:in-progress') !== null) {
+            throw new Error('Solving a level retained an in-progress snapshot');
+          }
           const nextLevel = Array.from(
             gameDocument.querySelectorAll('#win.screen.active button'),
           ).find((button) => button.textContent.trim() === 'Next — Level 2');
@@ -606,14 +669,82 @@
             throw new Error('Next level prompted after solved progress was already safely recorded');
           }
 
+          const nextDetails = gameDocument.querySelector('#play.screen.active details.accessible-board');
+          const nextSummary = nextDetails?.querySelector('summary');
+          if (nextDetails && nextSummary && !nextDetails.open) nextSummary.click();
+          await waitFor(() => nextDetails?.open, 'Level 2 controls after solved progression');
+          const nextSource = activeCell(0, 0);
+          const nextTarget = activeCell(0, 1);
+          if (!nextSource || !nextTarget) throw new Error('Level 2 restart regression cells are missing');
+          nextSource.click();
+          nextTarget.click();
+          await waitForLevelTwo(1);
+          const restartedBoardLabels = levelTwoLabels();
+          const restartButton = Array.from(gameDocument.querySelectorAll('#play.screen.active .toolbar button')).find(
+            (button) => button.textContent.trim() === 'Restart',
+          );
+          if (!restartButton) throw new Error('Restart control is missing after solved progression');
+          restartButton.click();
+          const restartDialog = await waitFor(
+            () => gameDocument.querySelector('.overlay.open [role="dialog"]'),
+            'Restart confirmation after a resumed pour',
+          );
+          const keepRestartPlaying = Array.from(restartDialog.querySelectorAll('button')).find(
+            (button) => button.textContent.trim() === 'Keep playing',
+          );
+          if (!keepRestartPlaying) throw new Error('Restart cancel action is missing');
+          keepRestartPlaying.click();
+          await waitFor(() => !gameDocument.querySelector('.overlay.open [role="dialog"]'), 'Restart cancel');
+          const cancelRestartReload = await reloadAndPlay(gameWindow, gameDocument, 1);
+          gameWindow = cancelRestartReload.gameWindow;
+          gameDocument = cancelRestartReload.gameDocument;
+          pendingFrames = cancelRestartReload.pendingFrames;
+          if (levelTwoLabels().some((label, index) => label !== restartedBoardLabels[index])) {
+            throw new Error('Canceling Restart failed to preserve the board across a true reload');
+          }
+
+          const confirmedRestart = Array.from(gameDocument.querySelectorAll('#play.screen.active .toolbar button')).find(
+            (button) => button.textContent.trim() === 'Restart',
+          );
+          if (!confirmedRestart) throw new Error('Restart control is missing after its canceled attempt');
+          confirmedRestart.click();
+          const confirmRestartDialog = await waitFor(
+            () => gameDocument.querySelector('.overlay.open [role="dialog"]'),
+            'the confirmed Restart dialog after reload',
+          );
+          const confirmRestart = Array.from(confirmRestartDialog.querySelectorAll('button')).find(
+            (button) => button.textContent.trim() === 'Restart level',
+          );
+          if (!confirmRestart) throw new Error('Restart confirmation action is missing');
+          confirmRestart.click();
+          await waitForLevelTwo(0);
+          if (gameWindow.localStorage.getItem('hexpour:in-progress') !== null) {
+            throw new Error('Confirming Restart did not clear the saved progress');
+          }
+          const restartReload = await reloadAndPlay(gameWindow, gameDocument, 0);
+          gameWindow = restartReload.gameWindow;
+          gameDocument = restartReload.gameDocument;
+          pendingFrames = restartReload.pendingFrames;
+          if (levelTwoLabels().some((label, index) => label !== initialLevelTwoLabels[index])) {
+            throw new Error('A true reload after Restart did not begin with the original Level 2 board');
+          }
+
           return {
-            backNavigationKeepsBoardWithoutPrompt: true,
-            sameLevelSelectionResumesProgress: true,
-            homePlayResumesProgress: true,
-            changingLevelPromptsAccessibly: true,
-            cancelPreservesBoardAndFocus: true,
-            confirmedChangeStartsChosenLevel: true,
-            solvedNextLevelHasNoRedundantPrompt: true,
+            result: {
+              backNavigationKeepsBoardWithoutPrompt: true,
+              sameLevelSelectionResumesProgress: true,
+              homePlayResumesProgress: true,
+              truePageReloadRestoresBoardAndMoveCount: true,
+              changingLevelPromptsAccessibly: true,
+              cancelPreservesBoardAndFocusAcrossReload: true,
+              confirmedChangeStartsChosenLevelAndClearsOldSave: true,
+              solveClearsSnapshotAndNextLevelStartsFresh: true,
+              restartCancelPreservesProgressAcrossReload: true,
+              confirmedRestartClearsProgressAcrossReload: true,
+            },
+            gameWindow,
+            gameDocument,
+            pendingFrames,
           };
         }
 
@@ -747,8 +878,8 @@
               ),
             'the loaded game home and Play button',
           );
-          const gameWindow = frame.contentWindow;
-          const gameDocument = frame.contentDocument;
+          let gameWindow = frame.contentWindow;
+          let gameDocument = frame.contentDocument;
           if (window.innerWidth !== width || window.innerHeight !== height ||
               gameWindow.innerWidth !== width || gameWindow.innerHeight !== height) {
             throw new Error(
@@ -768,7 +899,7 @@
           }
 
           // Hold frames for deterministic resize and Hint redraw assertions.
-          const pendingFrames = [];
+          let pendingFrames = [];
           let interceptedAnimationFrames = 0;
           gameWindow.requestAnimationFrame = (callback) => {
             pendingFrames.push(callback);
@@ -836,7 +967,11 @@
               context,
               pendingFrames,
             );
-            interactions.navigation = await testProgressNavigation(gameWindow, gameDocument);
+            const navigation = await testProgressNavigation(gameWindow, gameDocument, pendingFrames);
+            interactions.navigation = navigation.result;
+            gameWindow = navigation.gameWindow;
+            gameDocument = navigation.gameDocument;
+            pendingFrames = navigation.pendingFrames;
           }
 
           const currentDetails = gameDocument.querySelector('details.accessible-board');
